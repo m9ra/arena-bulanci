@@ -73,13 +73,13 @@ def format_elapsed_time(seconds):
     if days > 2:
         days = math.floor(days)
         hours %= 24
-        return f"{days:.0f}d {hours:.0f}h"
+        return f"{days:02.0f}d {hours:02.0f}h"
 
     if hours > 2:
         hours = math.floor(hours)
         minutes %= 60
-        return f"{hours:.0f}h {minutes:.0f}m"
+        return f"{hours:02.0f}h {minutes:02.0f}m"
 
     minutes = math.floor(minutes)
     seconds %= 60
-    return f"{minutes:.0f}m {seconds:.0f}s"
+    return f"{minutes:02.0f}m {seconds:02.0f}s"
