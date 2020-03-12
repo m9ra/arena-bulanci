@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Arena</title>
+    <script src="/static/js/color.js"></script>
+    <script src="/static/js/player_sprite_set.js"></script>
+    <script src="/static/js/game.js"></script>
+    <link rel="shortcut icon" href="static/favicon.png" type="image/x-icon">
+</head>
+<body style="position: absolute; top:0px; bottom:0px; left:0px; right:0px;background-color: green; margin:0px;width: 100%;height: 100%; min-height: 100%">
+{% if add_controls %}
+<script>const add_controls = true;</script>
+{% else %}
+<script>const add_controls = false;</script>
+{% endif %}
+<script>
+    let GAME = null;
+    let canvas = document.createElement('canvas');
+    let ctx = canvas.getContext("2d");
+
+    canvas.style.border = 'none';
+    canvas.style.margin = 0;
+    canvas.style.padding = 0;
+
+    function resize() {
+        let pWidth = canvas.parentElement.clientWidth;
+        let pHeight = canvas.parentElement.clientHeight;
+        let canvasWidth, canvasHeight;
+
+        if (pWidth / pHeight > mapWidth / mapHeight) {
+            canvasWidth = pHeight * mapWidth / mapHeight;
+            canvasHeight = pHeight;
+        } else {
+            canvasWidth = pWidth;
+            canvasHeight = pWidth * mapHeight / mapWidth;
+        }
+
+
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+        ctx.scale(1.0 * canvasWidth / mapWidth, 1.0 * canvasHeight / mapHeight);
+    }
+
+    document.body.appendChild(canvas);
+    canvas.parentElement.onresize = resize;
+    resize();
+
+    let WS = null;
+
+    function connect() {
+        WS = new WebSocket("ws://" + location.hostname + ":{{game_updates_port}}/observer");
+
+        WS.onmessage = function (event) {
+            let data = JSON.parse(event.data);
+            if (data["state"] !== undefined) {
+                GAME = new Game(data["state"], GAME);
+            }
+
+            if (data["updates"] !== undefined) {
+                GAME.apply(data["updates"]);
+            }
+        };
+        WS.onopen = function (event) {
+            WS.send("test message")
+        };
+
+        WS.onclose = function (e) {
+            console.log('Socket is closed. Reconnect will be attempted in 1 second.', e.reason);
+            setTimeout(function () {
+                connect();
+            }, 1000);
+        };
+    }
+
+    function step() {
+        if (GAME !== null) GAME.render(ctx);
+        window.requestAnimationFrame(step);
+    }
+
+    let keyRollover = [];
+
+    const arrows = {
+        37: 3,
+        38: 1,
+        39: 2,
+        40: 0
+    };
+
+    function registerKeyDown(event) {
+        let k = event.keyCode;
+        if (k === 32) {
+            WS.send("shoot");
+            event.stopPropagation();
+        }
+
+        if (arrows[k] !== undefined) {
+            keyRollover.push(k);
+            WS.send("dir:" + arrows[keyRollover[keyRollover.length - 1]]);
+            event.stopPropagation();
+        }
+    }
+
+    function registerKeyUp(event) {
+        let k = event.keyCode;
+        if (k === 32) {
+            event.stopPropagation();
+        }
+
+        if (arrows[k] !== undefined) {
+            keyRollover = keyRollover.filter(e => e !== k);
+
+            if (keyRollover.length === 0) {
+                WS.send("stop");
+            } else {
+                WS.send("dir:" + arrows[keyRollover[keyRollover.length - 1]])
+            }
+            event.stopPropagation();
+        }
+    }
+
+    if (add_controls) {
+        window.onkeydown = registerKeyDown;
+        window.onkeyup = registerKeyUp;
+    }
+
+    window.requestAnimationFrame(step);
+    connect();
+</script>
+</body>
+</html>

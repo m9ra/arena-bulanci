@@ -1,0 +1,4 @@
+websockets
+jsonpickle
+flask
+Flask-Bootstrap

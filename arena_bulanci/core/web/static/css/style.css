@@ -1,0 +1,100 @@
+.p1, .p2{
+    position:absolute;
+    line-height: 30px;
+    font-size: 25px;
+    overflow: hidden;
+    text-align:center;
+    text-overflow:ellipsis;
+    width:100%;
+}
+
+.p1{
+    top:-30px;
+}
+
+#results_table{
+    font-size: 20px;
+}
+
+.status_icon{
+    width:20px;
+    height:20px;
+    vertical-align:middle;
+}
+
+.navbar{
+   margin-bottom:5px;
+}
+
+.head {
+   margin-bottom:0px;
+}
+
+.head h1{
+    font-size: 50px;
+}
+
+.winning_move{
+    background-color:yellow!important;
+}
+
+.live_board{
+    position:relative;
+    width:90%;
+    margin: 180px 10px 0 10px;
+}
+
+.user_td{
+    overflow:hidden;
+    white-space:nowrap;
+}
+
+.board_cell_wrapper {
+    position:relative;
+    width: calc(100%/15);
+    padding: calc(100%/15) 0 0 0;
+    background-color: #e6e6e6;
+    display: inline-block;
+    margin:0;
+    border: 1px solid #2c3e50;
+}
+
+.board_cell_cross {
+  position: absolute;
+  right: 0px;
+  top: 0px;
+  left: 46%;
+  bottom: 0px;
+}
+
+.board_cell_cross:before, .board_cell_cross:after {
+  position: absolute;
+  left: 0px;
+  content: ' ';
+  height: 100%;
+  width: 3px;
+  background-color:#2ecc71;
+}
+.board_cell_cross:before {
+  transform: rotate(45deg);
+}
+.board_cell_cross:after {
+  transform: rotate(-45deg);
+}
+
+.board_cell_circle {
+    position: absolute;
+    top: calc(5% + 3px /2);
+    left: calc(5% + 3px /2);
+    width: calc(90% - 3px);
+    padding-top: calc(90% - 2 * 3px);
+    background-color: transparent;
+    border: 3px solid #e74c3c;
+    border-radius: 50%;
+}
+
+.board_row{
+    margin:0;
+    padding:0;
+    line-height:0;
+}

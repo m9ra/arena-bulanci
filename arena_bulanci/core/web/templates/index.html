@@ -1,0 +1,30 @@
+{% extends "layout.html" %}
+
+{% block title %}Arena{% endblock %}
+
+
+{% block content %}
+<div class="container-fluid" style="margin-left:20px">
+    <div class="row">
+        <div class="col-md-6">
+            <div class="head">
+                <h1>Arena: <b>{{arena}}</b></h1>
+
+            </div>
+
+            <table id="results_table" class="table table-hover">
+            </table>
+        </div>
+
+        <script language="JavaScript">
+            function loadTable() {
+                $('#results_table').load('/results_table');
+            }
+
+            setInterval(loadTable, 1000);
+            loadTable();
+        </script>
+    </div>
+</div>
+
+{% endblock %}
