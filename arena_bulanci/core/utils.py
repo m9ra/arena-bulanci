@@ -63,3 +63,23 @@ def patched_init(self, *args, **kwargs):
 def install_kill_on_exception_in_any_thread():
     sys.excepthook = send_kill_signal
     threading.Thread.__init__ = patched_init
+
+
+def format_elapsed_time(seconds):
+    minutes = seconds / 60
+    hours = minutes / 60
+    days = hours / 24
+
+    if days > 2:
+        days = math.floor(days)
+        hours %= 24
+        return f"{days:.0f}d {hours:.0f}h"
+
+    if hours > 2:
+        hours = math.floor(hours)
+        minutes %= 60
+        return f"{hours:.0f}h {minutes:.0f}m"
+
+    minutes = math.floor(minutes)
+    seconds %= 60
+    return f"{minutes:.0f}m {seconds:.0f}s"

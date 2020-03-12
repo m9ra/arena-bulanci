@@ -1,12 +1,12 @@
 <thead>
 <tr>
     <th scope="col">Player</th>
-    <th scope="col">Rating</th>
-    <th scope="col">Kills</th>
-    <th scope="col">Deaths</th>
-    <th scope="col">Shot Count</th>
-    <th scope="col">Ping</th>
-    <th scope="col">Total Time</th>
+    <th scope="col" class="text-center">Rating</th>
+    <th scope="col" class="text-center">Kills</th>
+    <th scope="col" class="text-center">Deaths</th>
+    <th scope="col" class="text-center">Shot Count</th>
+    <th scope="col" class="text-center">Ping</th>
+    <th scope="col" class="text-center">Online Time</th>
 </tr>
 </thead>
 {% for r in users %}
@@ -22,11 +22,11 @@
             {{r.username}}
         </div>
     </td>
-    <td>{{'%0.0f' % r.rating}}</td>
-    <td>{{r.kills}}</td>
-    <td>{{r.deaths}}</td>
-    <td>{{r.shots}}</td>
-    <td>{{'%0.0f' % (r.ping * 1000)}}ms</td>
-    <td>{{r.total_time}}</td>
+    <td class="text-center">{{'%0.0f' % r.rating}}</td>
+    <td class="text-center">{{r.kills}}</td>
+    <td class="text-center">{{r.deaths}}</td>
+    <td class="text-center">{{r.shots}}</td>
+    <td class="text-center">{{'%0.0f' % (r.ping * 1000)}}ms</td>
+    <td class="text-center">{{format_elapsed_time(r.total_time)}}</td>
 </tr>
 {% endfor %}

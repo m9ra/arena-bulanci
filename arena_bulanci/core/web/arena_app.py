@@ -9,7 +9,7 @@ from flask_bootstrap import Bootstrap
 
 from arena_bulanci.core.config import REMOTE_ARENA_WEB_PORT, REMOTE_ARENA_GAME_UPDATES_PORT, TICKS_PER_SECOND
 from arena_bulanci.core.game import Game
-from arena_bulanci.core.utils import jsondumps, jsonloads
+from arena_bulanci.core.utils import jsondumps, jsonloads, format_elapsed_time
 from arena_bulanci.core.web.game_update_server import GameUpdateServer
 from arena_bulanci.core.web.user_stats import UserStats
 
@@ -134,6 +134,8 @@ class ArenaApp(object):
         log.setLevel(logging.ERROR)
 
         print(f"ARENA WEB ON: http://{self._host}:{self._web_port}/")
+
+        app.jinja_env.globals.update(format_elapsed_time=format_elapsed_time)
         app.run(
             debug=True, use_reloader=False, host=self._host,
             port=self._web_port,
