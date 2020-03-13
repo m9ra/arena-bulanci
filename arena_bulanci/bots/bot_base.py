@@ -1,26 +1,29 @@
 import random
+from concurrent.futures.thread import ThreadPoolExecutor
 from queue import Queue
 from threading import Thread
-from time import sleep
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional, List, Dict
 
+from arena_bulanci.bots.game_plan import GamePlan
 from arena_bulanci.core.game import Game
 from arena_bulanci.core.game_updates.game_update_request import GameUpdateRequest
-from arena_bulanci.core.game_updates.player_move_request import PlayerMoveRequest, DIRECTION_DEFINITIONS, \
-    DIRECTION_LOOKUP
+from arena_bulanci.core.game_updates.player_move_request import PlayerMoveRequest
 from arena_bulanci.core.game_updates.player_rotation_request import PlayerRotationRequest
 from arena_bulanci.core.game_updates.player_spawn_request import PlayerSpawnRequest
 from arena_bulanci.core.game_updates.shoot_request import ShootRequest
 from arena_bulanci.core.player import Player
-from arena_bulanci.core.utils import distance, install_kill_on_exception_in_any_thread
+from arena_bulanci.core.utils import distance, install_kill_on_exception_in_any_thread, DIRECTION_DEFINITIONS, step_from
 
+MAX_CACHED_PLANS = 1000
+PLAN_EXECUTOR = ThreadPoolExecutor(max_workers=1)
 
 class BotBase(object):
-    def __init__(self):
+    def __init__(self, color: Tuple[int, int, int] = None):
         self.player_id: Optional[str] = None
-        self.color: Optional[Tuple[int, int, int]] = (
-            random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)
-        )
+        self.color: Optional[Tuple[int, int, int]] = color
+        if self.color is None:
+            self.color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+
         self._waits_for_spawn = True
         self._waits_for_kill = False
         self._update_requests: List[GameUpdateRequest] = []
@@ -30,6 +33,7 @@ class BotBase(object):
         install_kill_on_exception_in_any_thread()
         self._worker = Thread(target=self._play_worker, daemon=True).start()
         self._update_request_callback = None
+        self._position_plans: Dict[Tuple[int, int], GamePlan] = {}
 
     def _play(self):
         """
@@ -73,7 +77,41 @@ class BotBase(object):
         self.add_update_request(ShootRequest(self.player_id))
 
     def move_towards(self, target: Tuple[int, int]):
-        # todo add obstacle avoiding logic here (maybe real path planning?)
+        if not self.try_move_towards_by_plan(target):
+            self.simple_move_towards(target)
+
+    def try_move_towards_by_plan(self, target: Tuple[int, int]):
+        if target not in self._position_plans:
+            if len(self._position_plans) > MAX_CACHED_PLANS:
+                self._position_plans.clear()
+            self._position_plans[target] = None  # allocate slot for the plan
+
+            def _create_plan_async():
+                plan = GamePlan.plan_route_to_targets([target], allow_shooting=True)
+                self._position_plans[target] = plan
+
+            PLAN_EXECUTOR.submit(_create_plan_async)
+            return False
+
+        plan = self._position_plans[target]
+        if plan is None:
+            # plan was requested but is not available yet
+            return False
+
+        desired_direction = plan.board[self.position].move_direction
+        if not self.has_free_step_in(desired_direction):
+            # plan does not count with temporary obstacles
+            return False
+
+        self.rotate(desired_direction)
+        self.move()
+        return True
+
+    def has_free_step_in(self, direction: int):
+        next_position = step_from(self.position, direction)
+        return self.game.can_player_step_on(next_position, disabled_objects=[self.my_player])
+
+    def simple_move_towards(self, target: Tuple[int, int]):
         d = DIRECTION_DEFINITIONS[self.direction]
         p = self.position
         new_pos = (p[0] + d[0], p[1] + d[1])
@@ -87,6 +125,8 @@ class BotBase(object):
             if not self.game.validate(move_request):
                 # probably some obstacle, make random step to unstuck
                 self.rotate_randomly()
+                for _ in range(2):
+                    self.move()
 
             self.add_update_request(move_request)
         else:
@@ -95,8 +135,11 @@ class BotBase(object):
     def move(self):
         self.add_update_request(PlayerMoveRequest(self.player_id))
 
-    def rotate(self, direction):
-        self.add_update_request(PlayerRotationRequest(self.player_id, direction))
+    def rotate(self, direction, skip_if_already_rotated=True):
+        if skip_if_already_rotated and self.direction == direction:
+            return
+
+        self.add_update_request(PlayerRotationRequest(self.player_id, direction % len(DIRECTION_DEFINITIONS)))
 
     def rotate_randomly(self):
         self.add_update_request(PlayerRotationRequest(
@@ -109,12 +152,22 @@ class BotBase(object):
             if not self.game.has_clear_bullet_path(self.my_player.as_if_rotated_to(shooting_direction), opponent):
                 continue  # can't hit the opponent
 
-            if shooting_direction != self.direction:
-                self.add_update_request(PlayerRotationRequest(self.player_id, shooting_direction))
-
+            self.rotate(shooting_direction)
             return True
 
         return False
+
+    def get_shootable_opponents(self) -> List[Tuple[Player, int]]:
+        result = []
+        for opponent in self.game.opponents_of(self.my_player):
+            shooting_direction = self.my_player.get_closest_direction_towards(opponent.position)
+            if not self.game.has_clear_bullet_path(self.my_player.as_if_rotated_to(shooting_direction), opponent):
+                continue  # can't hit the opponent
+
+            result.append((opponent, shooting_direction))
+
+        return result
+
 
     def get_random_reachable_point(self):
         # every spawn point has to be reachable

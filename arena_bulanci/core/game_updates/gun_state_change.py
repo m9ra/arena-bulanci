@@ -1,9 +1,6 @@
 from typing import Optional
 
-from arena_bulanci.core.bullet import Bullet
-from arena_bulanci.core.config import PLAYER_BOX_RADIUS
 from arena_bulanci.core.game_updates.game_update import GameUpdate
-from arena_bulanci.core.game_updates.player_move_request import DIRECTION_DEFINITIONS
 from arena_bulanci.core.utils import has
 
 

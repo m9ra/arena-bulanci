@@ -1,10 +1,8 @@
 from typing import List
 
-from arena_bulanci.core.config import PLAYER_BOX_RADIUS
 from arena_bulanci.core.game_updates.add_bullet import AddBullet
 from arena_bulanci.core.game_updates.game_update import GameUpdate
 from arena_bulanci.core.game_updates.gun_state_change import GunStateChange
-from arena_bulanci.core.game_updates.player_move_request import DIRECTION_DEFINITIONS
 from arena_bulanci.core.game_updates.player_update_request import PlayerUpdateRequest
 
 

@@ -3,7 +3,7 @@ import random
 import sys
 import traceback
 from copy import deepcopy
-from typing import Dict, List, Tuple, Iterable, Callable
+from typing import Dict, List, Tuple, Iterable, Callable, Optional
 
 from arena_bulanci.core.bullet import Bullet
 from arena_bulanci.core.collision_exception import CollisionException
@@ -21,6 +21,7 @@ from arena_bulanci.core.player import Player
 from arena_bulanci.core.utils import distance_sqr
 
 OBSTACLE_BOXES = list(get_obstacle_boxes())
+_UNREACHABLE_POSITIONS: List[Tuple[int, int]] = []
 
 
 class Game(object):
@@ -41,6 +42,10 @@ class Game(object):
     @property
     def is_running(self):
         return True
+
+    @property
+    def bullets(self) -> List[Bullet]:
+        return list(self._bullets)
 
     def subscribe_ticks(self, subscriber: Callable[[List[GameUpdate]], None]):
         self._subscribers.append(subscriber)
@@ -196,7 +201,8 @@ class Game(object):
             if self.can_player_step_on(point):
                 return point
 
-    def get_player_bounding_boxes(self, position: Tuple[int, int]) -> List:
+    @classmethod
+    def get_player_bounding_boxes(cls, position: Tuple[int, int]) -> List:
         return [CircleBox(position, PLAYER_BOX_RADIUS)]
 
     def _spawn_player(self, player_id: str):
@@ -257,3 +263,32 @@ class Game(object):
 
         for box in OBSTACLE_BOXES:
             yield box, box
+
+    @classmethod
+    def get_positions_unreachable_for_players(cls):
+        global _UNREACHABLE_POSITIONS
+
+        return list(_UNREACHABLE_POSITIONS)
+
+    @classmethod
+    def would_player_hit_obstacle_on(cls, position: Tuple[int, int]):
+        if position[0] < PLAYER_BOX_RADIUS or position[1] < PLAYER_BOX_RADIUS:
+            return True
+
+        if position[0] + PLAYER_BOX_RADIUS > MAP_WIDTH or position[1] + PLAYER_BOX_RADIUS > MAP_HEIGHT:
+            return True
+
+        bounding_boxes = cls.get_player_bounding_boxes(position)
+
+        for box in OBSTACLE_BOXES:
+            if box.intersects(bounding_boxes):
+                return True
+
+        return False
+
+
+for x in range(MAP_WIDTH):
+    for y in range(MAP_HEIGHT):
+        position = (x, y)
+        if Game.would_player_hit_obstacle_on(position):
+            _UNREACHABLE_POSITIONS.append(position)

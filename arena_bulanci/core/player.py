@@ -3,10 +3,9 @@ from copy import copy
 from typing import Optional, Tuple
 
 from arena_bulanci.core.config import TICKS_PER_SECOND, BULLET_RAY_LENGTH, PLAYER_BOX_RADIUS
-from arena_bulanci.core.game_updates.player_move_request import DIRECTION_LOOKUP, DIRECTION_DEFINITIONS
 from arena_bulanci.core.gun import Gun
 from arena_bulanci.core.physics.segment import Segment
-from arena_bulanci.core.utils import sign
+from arena_bulanci.core.utils import sign, DIRECTION_DEFINITIONS, DIRECTION_LOOKUP
 
 
 def create_revolver():

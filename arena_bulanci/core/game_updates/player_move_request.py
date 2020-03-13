@@ -4,9 +4,7 @@ from arena_bulanci.core.collision_exception import CollisionException
 from arena_bulanci.core.game_updates.game_update import GameUpdate
 from arena_bulanci.core.game_updates.player_state_change import PlayerStateChange
 from arena_bulanci.core.game_updates.player_update_request import PlayerUpdateRequest
-
-DIRECTION_DEFINITIONS = [(0, 1), (0, -1), (1, 0), (-1, 0)]
-DIRECTION_LOOKUP = dict(zip(DIRECTION_DEFINITIONS, range(len(DIRECTION_DEFINITIONS))))
+from arena_bulanci.core.utils import DIRECTION_DEFINITIONS
 
 
 class PlayerMoveRequest(PlayerUpdateRequest):

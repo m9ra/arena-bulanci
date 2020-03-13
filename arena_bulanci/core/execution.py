@@ -40,23 +40,25 @@ def run_local_game(bots: List[BotBase], simulate_real_delay=True):
         game.step(catch_exceptions=False)
         iteration_end = datetime.datetime.now()
 
-        # optionally simulate iteration delay
         iteration_duration = (iteration_end - iteration_start).total_seconds()
         if simulate_real_delay:
+            # optionally simulate iteration delay
             desired_iteration_time = 1 / TICKS_PER_SECOND
             sleep_time = max(0, desired_iteration_time - iteration_duration)
             sleep(sleep_time)
 
 
-def run_remote_arena_game(bot: BotBase, username: str):
+def run_remote_arena_game(bot: BotBase, username: str, print_think_time: bool = False):
     # connect to arena
-    asyncio.get_event_loop().run_until_complete(_run_remote_arena_game(bot, username))
+    asyncio.get_event_loop().run_until_complete(
+        _run_remote_arena_game(bot, username, print_think_time=print_think_time)
+    )
 
 
-async def _run_remote_arena_game(bot: BotBase, username: str, reconnect=True):
+async def _run_remote_arena_game(bot: BotBase, username: str, reconnect=True, print_think_time=False):
     while True:
         try:
-            await _play_remote_game(bot, username)
+            await _play_remote_game(bot, username, print_think_time=print_think_time)
         except (ConnectionRefusedError, websockets.ConnectionClosedError):
             if reconnect:
                 print("Disconnected, trying to reconnect")
@@ -74,7 +76,6 @@ async def _play_remote_game(bot: BotBase, username: str, print_think_time: bool 
     uri = f"ws://{REMOTE_ARENA_HOSTNAME}:{REMOTE_ARENA_GAME_UPDATES_PORT}/game"
     loop = asyncio.get_event_loop()
     async with websockets.connect(uri) as websocket:
-        # todo send color
         await websocket.send(jsondumps({"player_id": username}))
         initial_data_str = await websocket.recv()
         print(f"Player {username} connected")

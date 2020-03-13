@@ -2,9 +2,9 @@ import random
 from typing import List, Optional, Tuple
 
 from arena_bulanci.core.game_updates.game_update import GameUpdate
-from arena_bulanci.core.game_updates.player_move_request import DIRECTION_DEFINITIONS
 from arena_bulanci.core.game_updates.player_state_change import PlayerStateChange
 from arena_bulanci.core.game_updates.player_update_request import PlayerUpdateRequest
+from arena_bulanci.core.utils import DIRECTION_DEFINITIONS
 
 
 class PlayerSpawnRequest(PlayerUpdateRequest):

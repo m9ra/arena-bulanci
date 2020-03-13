@@ -3,6 +3,9 @@ let PLAYER_SIZE = 3;
 let PLAYER_BOUNDING_BOX_SIZE = 2.1;
 let TICKS_PER_SECOND = 15;
 let SHOW_DEBUG_INFO = false;
+const AMMO_BAR_LEN = 1.0;
+const AMMO_BAR_FILL_LEN = 0.7;
+const AMMO_BAR_HEIGHT = 0.2;
 
 let mapWidth = 160;
 let mapHeight = 90;
@@ -36,6 +39,7 @@ class Game {
         this.tick = state._tick;
         this.tickTime = Date.now();
         this.players = state._players;
+        this.sortedPlayers = this._sortPlayers(this.players);
         this.bullets = state._bullets;
         this.prevGame = prevGame;
 
@@ -86,8 +90,8 @@ class Game {
 
     _renderPlayers(ctx, partialTick, currentTime) {
         const showBoundingBox = SHOW_DEBUG_INFO;
-        for (let player_id in this.players) {
-            let player = this.players[player_id];
+        for (let player of this.sortedPlayers) {
+            let player_id = player.id;
             let playerRgb = this._parseTuple(player.color);
             let playerColor = this.defaultPlayerColor;
             if (playerRgb !== undefined) {
@@ -123,15 +127,32 @@ class Game {
 
             let animationTime = currentTime - (ANIMATION_OFFSETS[player_id] || 0);
             let index = Math.round(animationTime / 50);
+
+            ctx.font = "1.5px Georgia";
+            ctx.fillStyle = 'lightblue';
+            ctx.textAlign = "center";
+            let playerName = player_id.split("@");
+            ctx.fillText(playerName[0], position[0], position[1] - PLAYER_SIZE - 1.3);
+
+
             let img = PLAYER_SPRITES.getWalking(playerColor, player._direction, index);
             if (img !== null) {
-                ctx.font = "1.5px Georgia";
-                ctx.fillStyle = 'lightblue';
-                ctx.textAlign = "center";
-                let playerName = player_id.split("@");
-                ctx.fillText(playerName[0], position[0], position[1] - PLAYER_SIZE - 0.7);
                 ctx.drawImage(img, position[0] - this.center, position[1] - this.center, this.imageSize, this.imageSize);
             }
+
+            for (let i = 0; i < player.gun.ammo_count; ++i) {
+                ctx.beginPath();
+                let s = position[0] + i * AMMO_BAR_LEN;
+                let e = s + AMMO_BAR_FILL_LEN;
+                let y = position[1] - PLAYER_SIZE - 1.2 + 3 * AMMO_BAR_HEIGHT;
+                let offset = AMMO_BAR_LEN * player.gun.full_ammo_count / 2;
+                ctx.strokeStyle = 'lightblue';
+                ctx.lineWidth = AMMO_BAR_HEIGHT;
+                ctx.moveTo(s - offset, y);
+                ctx.lineTo(e - offset, y);
+                ctx.stroke();
+            }
+
         }
     }
 
@@ -160,9 +181,9 @@ class Game {
 
             p = [p[0] + coords[0] * distance, p[1] + coords[1] * distance];
             ctx.beginPath();
-            ctx.arc(p[0], p[1], 0.25, 0, 2 * Math.PI);
-            ctx.lineWidth = 0.05;
-            ctx.fillStyle = 'orange';
+            ctx.arc(p[0], p[1], 0.15, 0, 2 * Math.PI);
+            ctx.lineWidth = 0;
+            ctx.strokeStyle = 'orange';
             ctx.fill();
             ctx.stroke();
         }
@@ -221,6 +242,24 @@ class Game {
             return undefined;
         }
         return positionData["py/tuple"];
+    }
+
+    _sortPlayers(players) {
+        let result = [];
+        for (let playerId in players) {
+            let player = players[playerId];
+
+            result.push(player);
+        }
+
+        let self = this;
+        let key = function (player) {
+            return self._parseTuple(player.position)[0]
+        };
+        result.sort(function (a, b) {
+            return key(a) < key(b) ? -1 : (a === b ? 0 : 1);
+        });
+        return result;
     }
 }
 

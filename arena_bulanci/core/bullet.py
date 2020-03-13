@@ -2,6 +2,7 @@ from typing import Tuple, Optional
 
 from arena_bulanci.core.config import BULLET_SPEED
 from arena_bulanci.core.physics.segment import Segment
+from arena_bulanci.core.utils import DIRECTION_LOOKUP
 
 
 class Bullet(object):
@@ -13,14 +14,22 @@ class Bullet(object):
         self.direction_coords = direction_coords
         self.reward_receiver_id = reward_receiver_id
 
-    def get_current_trajectory(self, game: 'Game') -> Optional[Segment]:
+    @property
+    def direction(self):
+        return DIRECTION_LOOKUP[self.direction_coords]
+
+    def get_current_trajectory(self, game: 'Game', trajectory_ticks=1) -> Optional[Segment]:
         total_ticks_travelled = game.tick - self.start_tick
         if total_ticks_travelled == 0:
             return None
 
         end = (
-            self.start_position[0] + self.direction_coords[0] * total_ticks_travelled * BULLET_SPEED,
-            self.start_position[1] + self.direction_coords[1] * total_ticks_travelled * BULLET_SPEED
+            self.start_position[0] + self.direction_coords[0] * total_ticks_travelled * BULLET_SPEED * trajectory_ticks,
+            self.start_position[1] + self.direction_coords[1] * total_ticks_travelled * BULLET_SPEED * trajectory_ticks
         )
-        start = (end[0] - self.direction_coords[0] * BULLET_SPEED, end[1] - self.direction_coords[1] * BULLET_SPEED)
+        total_ticks_travelled -= 1
+        start = (
+            self.start_position[0] + self.direction_coords[0] * total_ticks_travelled * BULLET_SPEED * trajectory_ticks,
+            self.start_position[1] + self.direction_coords[1] * total_ticks_travelled * BULLET_SPEED * trajectory_ticks
+        )
         return Segment(start, end, self.direction_coords)
