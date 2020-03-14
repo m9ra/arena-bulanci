@@ -213,7 +213,9 @@ class BotBase(object):
         if not self._update_requests:
             return None
 
-        return self._update_requests.pop(0)
+        update = self._update_requests.pop(0)
+        update.tick = game.tick
+        return update
 
     def _play_worker(self):
         while True:

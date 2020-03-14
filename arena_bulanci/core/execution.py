@@ -86,7 +86,6 @@ async def _play_remote_game(bot: BotBase, username: str, print_think_time: bool 
         bot._raw_game = game
         while game.is_running:
             update_data_str = await websocket.recv()
-            start = datetime.datetime.now()
             if update_data_str == "disconnected":
                 raise AssertionError("Connection was ended because of other connection with the same id.")
 
@@ -105,6 +104,7 @@ async def _play_remote_game(bot: BotBase, username: str, print_think_time: bool 
                 if update_request is None:
                     return
 
+                start = datetime.datetime.now()
                 update_request_str = jsondumps(update_request)
                 end = datetime.datetime.now()
                 if print_think_time:

@@ -5,6 +5,7 @@ from threading import Thread
 from typing import List, Set, Dict
 import websockets
 
+from arena_bulanci.core.config import TICKS_PER_SECOND
 from arena_bulanci.core.game import Game
 from arena_bulanci.core.game_updates.add_bullet import AddBullet
 from arena_bulanci.core.game_updates.game_update import GameUpdate
@@ -93,14 +94,16 @@ class GameUpdateServer(object):
             await self._handle_player_connection(player_id, websocket)
 
             async for message in websocket:
-                ping_time = (datetime.now() - self._last_tick_time).total_seconds()
+                update_request = jsonloads(message)
+                update_request.player_id = player_id
+
+                tick_slack = self._game.tick - update_request.tick
+                ping_time = (datetime.now() - self._last_tick_time).total_seconds() + tick_slack * 1.0 / TICKS_PER_SECOND
                 if player_id not in self._pings:
                     self._pings[player_id] = ping_time
 
                 self._pings[player_id] = self._pings[player_id] * 0.95 + 0.05 * ping_time
 
-                update_request = jsonloads(message)
-                update_request.player_id = player_id
                 self._game.accept([update_request])
         except Exception as e:
             print(f"_game_play_handler: {repr(e)}")
