@@ -62,6 +62,10 @@ class BotBase(object):
         return self.game.get_player(self.player_id)
 
     @property
+    def opponents(self):
+        return self.game.opponents_of(self.my_player)
+
+    @property
     def position(self):
         return self.my_player.position
 
@@ -107,9 +111,13 @@ class BotBase(object):
         self.move()
         return True
 
-    def has_free_step_in(self, direction: int):
-        next_position = step_from(self.position, direction)
-        return self.game.can_player_step_on(next_position, disabled_objects=[self.my_player])
+    def has_free_step_in(self, direction: int, step_count: int = 1):
+        next_position = self.position
+        for _ in range(step_count):
+            next_position = step_from(next_position, direction)
+            if not self.game.can_player_step_on(next_position, disabled_objects=[self.my_player]):
+                return False
+        return True
 
     def simple_move_towards(self, target: Tuple[int, int]):
         d = DIRECTION_DEFINITIONS[self.direction]

@@ -11,8 +11,8 @@ import signal
 DIRECTION_DEFINITIONS = [(0, 1), (0, -1), (1, 0), (-1, 0)]
 DIRECTION_LOOKUP = dict(zip(DIRECTION_DEFINITIONS, range(len(DIRECTION_DEFINITIONS))))
 
-HORIZONTAL_DIRS = [2, 3]
-VERTICAL_DIRS = [0, 1]
+HORIZONTAL_DIRECTIONS = [2, 3]
+VERTICAL_DIRECTIONS = [0, 1]
 
 def has(value): return value is not None
 
@@ -48,7 +48,7 @@ def distance(p1, p2):
 
 
 def is_orthogonal(dir1, dir2):
-    return (dir1 in HORIZONTAL_DIRS) != (dir2 in HORIZONTAL_DIRS)
+    return (dir1 in HORIZONTAL_DIRECTIONS) != (dir2 in HORIZONTAL_DIRECTIONS)
 
 
 

@@ -5,6 +5,8 @@
     <th scope="col" class="text-center">Kills</th>
     <th scope="col" class="text-center">Deaths</th>
     <th scope="col" class="text-center">Shot Count</th>
+    <th scope="col" class="text-center">K/D</th>
+    <th scope="col" class="text-center">Effectiveness</th>
     <th scope="col" class="text-center">Ping</th>
     <th scope="col" class="text-center">Online Time</th>
 </tr>
@@ -26,6 +28,8 @@
     <td class="text-center">{{r.kills}}</td>
     <td class="text-center">{{r.deaths}}</td>
     <td class="text-center">{{r.shots}}</td>
+    <td class="text-center">{{'%0.1f' % (100.0*r.kills/r.deaths)}}%</td>
+    <td class="text-center">{{'%0.0f' % (100.0*r.kills/r.shots)}}%</td>
     <td class="text-center">{{'%0.0f' % (r.ping * 1000)}}ms</td>
     <td class="text-center">{{format_elapsed_time(r.total_time)}}</td>
 </tr>
