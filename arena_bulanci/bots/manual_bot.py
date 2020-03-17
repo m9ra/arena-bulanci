@@ -30,18 +30,18 @@ class ManualBot(BotBase):
             print(f"MANUAL CONTROL WEB FOR `{self.player_id}` RUNNING ON: http://127.0.0.1:{self._port}/game")
 
         if self.direction != self._desired_direction:
-            self.rotate(self._desired_direction)
+            self.MOVE_rotate(self._desired_direction)
             return
 
         if self._shoot:
             self._shoot = False
             if self.can_shoot:
-                self.shoot()
+                self.MOVE_shoot()
 
             return
 
         if self._move:
-            self.move()
+            self.MOVE_step_forward()
             return
 
     def _controll_callback(self, data):

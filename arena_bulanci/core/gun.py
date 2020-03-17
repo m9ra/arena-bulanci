@@ -11,6 +11,10 @@ class Gun(object):
 
         self._cooldown_start = None
 
+    @property
+    def cooldown_start(self):
+        return self._cooldown_start
+
     def can_shoot(self, game: 'Game'):
         if self.ammo_count <= 0:
             return False

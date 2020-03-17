@@ -29,7 +29,7 @@ class Bullet(object):
         )
         total_ticks_travelled -= 1
         start = (
-            self.start_position[0] + self.direction_coords[0] * total_ticks_travelled * BULLET_SPEED * trajectory_ticks,
-            self.start_position[1] + self.direction_coords[1] * total_ticks_travelled * BULLET_SPEED * trajectory_ticks
+            self.start_position[0] + self.direction_coords[0] * total_ticks_travelled * BULLET_SPEED,
+            self.start_position[1] + self.direction_coords[1] * total_ticks_travelled * BULLET_SPEED
         )
         return Segment(start, end, self.direction_coords)

@@ -242,7 +242,7 @@ class Game(object):
 
         return result
 
-    def get_nearest_hit(self, segment: Segment):
+    def get_nearest_hit(self, segment: Segment, extra_obstacles: Optional[List[Tuple]] = None):
         if segment is None:
             return None
 
@@ -250,6 +250,12 @@ class Game(object):
         for box, obj in self.get_all_bounding_boxes():
             for intersection in segment.get_intersection_points(box):
                 intersections.append((intersection, obj))
+
+        if extra_obstacles:
+            for box, obj in extra_obstacles:
+                for intersection in segment.get_intersection_points(box):
+                    intersections.append((intersection, obj))
+
 
         if not intersections:
             return None
