@@ -1,3 +1,17 @@
+.navbar-nav > .active {
+    background-color: #e7e7e7;
+    height: 100%;
+}
+
+.navbar-nav a {
+    padding: 15px;
+}
+
+.clickable-row{
+    border-spacing: 0;
+    line-height: 1;
+}
+
 .p1, .p2{
     position:absolute;
     line-height: 30px;
