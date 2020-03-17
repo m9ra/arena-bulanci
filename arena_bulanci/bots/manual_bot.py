@@ -1,12 +1,12 @@
-from typing import Optional
+from typing import Optional, Tuple
 
 from arena_bulanci.bots.bot_base import BotBase
 from arena_bulanci.core.web.arena_app import ArenaApp
 
 
 class ManualBot(BotBase):
-    def __init__(self, port: int, ws_port: Optional[int] = None):
-        super().__init__()
+    def __init__(self, port: int, color: Optional[Tuple[int, int, int]] = None, ws_port: Optional[int] = None):
+        super().__init__(color=color)
 
         if not ws_port:
             ws_port = port + 1

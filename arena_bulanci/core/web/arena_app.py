@@ -1,8 +1,8 @@
-import json
 import os
 import sys
 from threading import Thread
 from time import sleep
+from typing import Dict
 
 from flask import Flask, render_template
 from flask_bootstrap import Bootstrap
@@ -24,12 +24,14 @@ class ArenaApp(object):
 
         self._control_callback = None
         self._is_running = False
-        self._user_statistics = {}
+        self._user_statistics: Dict[str, UserStats] = {}
 
         self._arena_state_file = self._arena_name + ".state.json"
         if os.path.isfile(self._arena_state_file):
             with open(self._arena_state_file, "r") as f:
                 self._user_statistics = jsonloads(f.read())
+                for user_statistic in self._user_statistics.values():
+                    user_statistic.is_online = False
 
         Thread(target=self._persistency_worker, daemon=True).start()
 
