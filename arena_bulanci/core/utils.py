@@ -1,4 +1,5 @@
 import math
+import re
 from typing import Tuple
 
 import jsonpickle
@@ -10,6 +11,8 @@ import signal
 
 DIRECTION_DEFINITIONS = [(0, 1), (0, -1), (1, 0), (-1, 0)]
 DIRECTION_LOOKUP = dict(zip(DIRECTION_DEFINITIONS, range(len(DIRECTION_DEFINITIONS))))
+
+ROTATION_180 = [1, 0, 3, 2]
 
 HORIZONTAL_DIRECTIONS = [2, 3]
 VERTICAL_DIRECTIONS = [0, 1]
@@ -32,11 +35,8 @@ def step_from(position: Tuple[int, int], direction: int):
     return position[0] + coords[0], position[1] + coords[1]
 
 
-def rotate_180(direction: int):
-    coords = DIRECTION_DEFINITIONS[direction]
-    rev_coords = -coords[0], -coords[1]
-
-    return DIRECTION_LOOKUP[rev_coords]
+def rotate_180(direction: int) -> int:
+    return ROTATION_180[direction]
 
 
 def distance_sqr(p1, p2):
@@ -106,3 +106,8 @@ def format_elapsed_time(seconds):
     minutes = math.floor(minutes)
     seconds %= 60
     return f"{minutes:02.0f}m {seconds:02.0f}s"
+
+
+def validate_email(username):
+    if not re.match("[^@]+@[^@]+\.[^@]+", username):
+        raise ValueError(f"Username must be an email but `{username}` was given")

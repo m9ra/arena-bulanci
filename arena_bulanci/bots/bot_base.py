@@ -213,6 +213,7 @@ class BotBase(BotBaseLowLevel):
             if len(self._position_plans) > MAX_CACHED_PLANS:
                 # free up some memory, because there were too many plans created
                 self._position_plans.clear()
+                print("INFO: Clearing position plan cache")
 
             self._position_plans[target] = None  # allocate slot for the plan
 

@@ -33,7 +33,8 @@ class Game(object):
         self._update_requests: List[GameUpdateRequest] = []
 
         self._verbose = verbose
-        self._subscribers = []
+        self._tick_subscribers = []
+        self._pretick_subscribers = []
 
     @property
     def tick(self):
@@ -48,17 +49,25 @@ class Game(object):
         return list(self._bullets)
 
     def subscribe_ticks(self, subscriber: Callable[[List[GameUpdate]], None]):
-        self._subscribers.append(subscriber)
+        self._tick_subscribers.append(subscriber)
+
+    def subscribe_preticks(self, subscriber: Callable):
+        self._pretick_subscribers.append(subscriber)
 
     def accept(self, update_requests: List[GameUpdateRequest]):
         self._update_requests.extend(update_requests)
 
     def step(self, catch_exceptions=True) -> List[GameUpdate]:
+        for pretick_subscriber in self._pretick_subscribers:
+            pretick_subscriber()
+
         tick_start = datetime.datetime.now()
         verified_updates = []
+        requests = self._update_requests
+        self._update_requests = []
 
         already_requesting_players = set()
-        for update_request in self._update_requests:
+        for update_request in requests:
             player_id = None
             try:
                 player_id = update_request.player_id
@@ -94,7 +103,6 @@ class Game(object):
             update.apply_on(self)
             verified_updates.append(update)
 
-        self._update_requests.clear()
         self._tick += 1
         tick_end = datetime.datetime.now()
         if self._verbose:
@@ -103,7 +111,7 @@ class Game(object):
             for update in verified_updates:
                 print(update)
 
-        for subscriber in self._subscribers:
+        for subscriber in self._tick_subscribers:
             subscriber(verified_updates)
 
         return verified_updates
@@ -114,7 +122,7 @@ class Game(object):
 
         self._tick += 1
 
-        for subscriber in self._subscribers:
+        for subscriber in self._tick_subscribers:
             subscriber(updates)
 
     def validate(self, request: GameUpdateRequest):
@@ -126,13 +134,18 @@ class Game(object):
         return True
 
     def copy_without_internal_data(self):
-        subscribers = self._subscribers
-        self._subscribers = None
+        tick_subscribers = self._tick_subscribers
+        pretick_subscribers = self._pretick_subscribers
+        self._tick_subscribers = None
+        self._pretick_subscribers = None
         try:
             game_copy = deepcopy(self)
         finally:
-            self._subscribers = subscribers
-        game_copy._subscribers = None
+            self._tick_subscribers = tick_subscribers
+            self._pretick_subscribers = pretick_subscribers
+
+        game_copy._tick_subscribers = None
+        game_copy._pretick_subscribers = None
         game_copy._verbose = None
         game_copy._update_requests = []
 

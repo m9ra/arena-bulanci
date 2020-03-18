@@ -1,3 +1,5 @@
+import datetime
+import gc
 import os
 import sys
 from threading import Thread
@@ -146,8 +148,15 @@ class ArenaApp(object):
 
 def _game_worker(game: Game):
     while game.is_running:
+        start = datetime.datetime.now()
+        gc.collect(generation=0)  # clean memory so we run consistent iterations
+
         game.step(catch_exceptions=True)
-        sleep(1.0 / TICKS_PER_SECOND)
+        end = datetime.datetime.now()
+
+        duration_so_far = (end - start).total_seconds()
+        missing_step_time = max(0.01, 1.0 / TICKS_PER_SECOND - duration_so_far)
+        sleep(missing_step_time)
 
 
 if __name__ == "__main__":

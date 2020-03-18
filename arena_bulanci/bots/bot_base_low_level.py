@@ -29,7 +29,6 @@ class BotBaseLowLevel(object):
         self._game: Optional[Game] = None
 
         install_kill_on_exception_in_any_thread()
-        self._worker = Thread(target=self._play_worker, daemon=True).start()
         self._update_request_callback = None
         self._position_plans: Dict[Tuple[int, int], GamePlan] = {}
 
@@ -93,20 +92,3 @@ class BotBaseLowLevel(object):
         Adds update request to a queue which will be sent (one request at a time) to the arena.
         """
         self._update_requests.append(request)
-
-    def _play_worker(self):
-        """
-        Worker dispatching update requests.
-        """
-        while True:
-            game = self._incoming_updates.get()
-            while not self._incoming_updates.empty():
-                print(f"INFO: Skipping tick {game.tick}")
-                game = self._incoming_updates.get_nowait()
-
-            update = self.pop_update_request(game)
-
-            callback = self._update_request_callback
-            if callback:
-                self._update_request_callback = None
-                callback(update)
