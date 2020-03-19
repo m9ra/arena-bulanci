@@ -107,7 +107,7 @@ class GameUpdateServer(object):
                 print(f"sending updates to player_id: {player_id} failed: {repr(e)}")
 
         update_time = datetime.now() - self._update_roundtrip_start
-        if update_time.total_seconds() > 0.02:
+        if update_time.total_seconds() > 0.035:
             print(f"WARN: Update roundtrip: {update_time.total_seconds() * 1000:.2f}ms")
 
         with self._L_game:
