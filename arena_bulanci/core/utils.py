@@ -1,6 +1,6 @@
 import math
 import re
-from typing import Tuple
+from typing import Tuple, Optional
 
 import jsonpickle
 import threading
@@ -46,6 +46,29 @@ def distance_sqr(p1, p2):
 def distance(p1, p2):
     return math.sqrt(distance_sqr(p1, p2))
 
+
+def grid_distance(p1: Tuple[int, int], p2: Tuple[int, int], initial_direction: Optional[int] = None) -> int:
+    if p1 == p2:
+        return 0
+
+    extra_distance = 0
+    if initial_direction:
+        if closest_direction_towards(p1, p2) != initial_direction:
+            extra_distance += 1
+
+    return abs(p1[0] - p2[0]) + abs(p1[1] - p2[1]) + extra_distance
+
+
+def closest_direction_towards(p: Tuple[int, int], o: Tuple[int, int]) -> int:
+    xdiff = p[0] - o[0]
+    ydiff = p[1] - o[1]
+
+    if abs(xdiff) > abs(ydiff):
+        direction_coords = (-sign(xdiff), 0)
+    else:
+        direction_coords = (0, -sign(ydiff))
+
+    return DIRECTION_LOOKUP[direction_coords]
 
 def is_orthogonal(dir1, dir2):
     return (dir1 in HORIZONTAL_DIRECTIONS) != (dir2 in HORIZONTAL_DIRECTIONS)

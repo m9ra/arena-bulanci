@@ -1,11 +1,10 @@
-import math
 from copy import copy
 from typing import Optional, Tuple
 
 from arena_bulanci.core.config import TICKS_PER_SECOND, BULLET_RAY_LENGTH, PLAYER_BOX_RADIUS
 from arena_bulanci.core.gun import Gun
 from arena_bulanci.core.physics.segment import Segment
-from arena_bulanci.core.utils import sign, DIRECTION_DEFINITIONS, DIRECTION_LOOKUP
+from arena_bulanci.core.utils import DIRECTION_DEFINITIONS, closest_direction_towards
 
 
 def create_revolver():
@@ -51,15 +50,7 @@ class Player(object):
             # i.e. no rotation
             return self.direction
 
-        xdiff = p[0] - o[0]
-        ydiff = p[1] - o[1]
-
-        if abs(xdiff) > abs(ydiff):
-            direction_coords = (-sign(xdiff), 0)
-        else:
-            direction_coords = (0, -sign(ydiff))
-
-        return DIRECTION_LOOKUP[direction_coords]
+        return closest_direction_towards(p, o)
 
     def get_bullet_ray(self) -> Segment:
         p = self.position
