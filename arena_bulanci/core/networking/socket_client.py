@@ -1,14 +1,13 @@
 import json
 import socket
-import traceback
 from threading import Lock
 from typing import Optional
 
 class SocketClient(object):
-    def __init__(self, socket=None):
+    def __init__(self, new_socket=None):
         self._L_send = Lock()
         self._L_read = Lock()
-        self._socket = socket
+        self._socket = new_socket
         if self._socket is not None:
             self._socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 

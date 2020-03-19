@@ -60,7 +60,7 @@ def _run_remote_arena_game(bot: BotBase, username: str, reconnect=True, print_sk
         try:
             _raw_play_remote_game(bot, username, print_skipped_tick_info=print_skipped_tick_info,
                                   print_think_time=print_think_time)
-        except (ConnectionResetError):
+        except (ConnectionAbortedError, ConnectionRefusedError):
             if reconnect:
                 print("Disconnected, trying to reconnect")
                 sleep(5)
@@ -91,7 +91,7 @@ def _raw_play_remote_game(bot: BotBase, username: str, print_skipped_tick_info=T
         update_data_str = client.read_string()
         start = datetime.datetime.now()
         if update_data_str is None:
-            raise ConnectionResetError("Connection was closed")
+            raise ConnectionAbortedError("Connection was closed")
 
         if update_data_str == "disconnected":
             raise AssertionError("Connection was ended because of other connection with the same id.")
