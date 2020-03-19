@@ -10,6 +10,8 @@ class SocketClient(object):
         self._socket = new_socket
         if self._socket is not None:
             self._socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 32 * 8192)
+            self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 32 * 8192)
 
         self._is_connected = socket is not None
 
@@ -20,6 +22,9 @@ class SocketClient(object):
     def connect(self, host, port):
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 32 * 8192)
+        self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 32 * 8192)
+
         self._socket.connect((host, port))
         self._is_connected = True
 

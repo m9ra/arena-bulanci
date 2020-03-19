@@ -155,6 +155,7 @@ def _game_worker(game: Game):
         gc.collect(generation=0)  # clean memory so we run consistent iterations
 
         game.step(catch_exceptions=True)
+        gc.collect()
         end = datetime.datetime.now()
 
         duration_so_far = (end - start).total_seconds()

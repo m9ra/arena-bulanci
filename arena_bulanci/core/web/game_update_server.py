@@ -23,9 +23,12 @@ class GameUpdateServer(object):
         self._host = host
         self._port = port
         self._raw_updates_port = raw_updates_port
+        self._update_roundtrip_start = None
 
         self._full_state_subscribers: Set[websockets] = set()
         self._player_to_client: Dict[str, SocketClient] = {}
+        self._update_ready_clients: List[SocketClient] = []
+        self._current_tick_update_ready_clients: List[SocketClient] = []
         self._pings: Dict[str, float] = {}
 
         self._loop = asyncio.new_event_loop()
@@ -56,8 +59,12 @@ class GameUpdateServer(object):
         self._loop.run_forever()
 
     def _pretick_handler(self):
+        self._update_roundtrip_start = datetime.now()
         requests = []
         with self._L_game:
+            self._current_tick_update_ready_clients = list(self._update_ready_clients)
+            self._update_ready_clients.clear()
+
             for player_id, request in self._player_requests.items():
                 if not request:
                     continue
@@ -86,12 +93,27 @@ class GameUpdateServer(object):
         }
 
         # report updates
-        with self._L_game:
-            for updates in self._player_updates.values():
-                updates.append(update_group)
+        for updates_group in self._player_updates.values():
+            updates_group.append(update_group)
 
-        self._raw_game_pulse_event.set()
-        self._raw_game_pulse_event.clear()
+        for client in self._current_tick_update_ready_clients:
+            player_id = client.player_id
+            try:
+                update_groups_str = jsondumps(self._player_updates[player_id])
+                client.send_string(update_groups_str)
+                self._player_updates[player_id].clear()
+
+            except Exception as e:
+                print(f"sending updates to player_id: {player_id} failed: {repr(e)}")
+
+        update_time = datetime.now() - self._update_roundtrip_start
+        if update_time.total_seconds() > 0.02:
+            print(f"WARN: Update roundtrip: {update_time.total_seconds() * 1000:.2f}ms")
+
+        with self._L_game:
+            # make the pulse locked - this way, no update requests can be lost
+            self._raw_game_pulse_event.set()
+            self._raw_game_pulse_event.clear()
 
         if self._full_state_subscribers:
             full_state_data = self._get_full_state_data()
@@ -195,6 +217,8 @@ class GameUpdateServer(object):
                 client.send_string("disconnected")
                 return
 
+            client.player_id = player_id
+
             with self._L_game:
                 self._player_requests[player_id] = None
                 self._player_updates[player_id] = []
@@ -208,6 +232,7 @@ class GameUpdateServer(object):
                 update_request = jsonloads(message)
                 with self._L_game:
                     self._player_requests[player_id] = update_request
+                    self._update_ready_clients.append(client)
 
                 ping_end = datetime.now()
                 ping_time = (ping_end - ping_start).total_seconds()
@@ -215,16 +240,9 @@ class GameUpdateServer(object):
                     self._pings[player_id] = ping_time
 
                 self._pings[player_id] = self._pings[player_id] * 0.95 + 0.05 * ping_time
-
-                self._raw_game_pulse_event.wait()  # wait for pulse - then, updates will be available
-                with self._L_game:
-                    update_groups = self._player_updates[player_id]
-                    self._player_updates[player_id] = []
-
-                update_groups_str = jsondumps(update_groups)
+                self._raw_game_pulse_event.wait()  # wait for pulse - meaning, updates were sent
                 ping_start = datetime.now()
 
-                client.send_string(update_groups_str)
 
         except Exception as e:
             print(f"_raw_game_play_handler: {repr(e)}")
