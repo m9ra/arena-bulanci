@@ -48,6 +48,10 @@ class Game(object):
     def bullets(self) -> List[Bullet]:
         return list(self._bullets)
 
+    @property
+    def players(self):
+        return list(self._players)
+
     def subscribe_ticks(self, subscriber: Callable[[List[GameUpdate]], None]):
         self._tick_subscribers.append(subscriber)
 

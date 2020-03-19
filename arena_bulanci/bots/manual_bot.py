@@ -5,14 +5,19 @@ from arena_bulanci.core.web.arena_app import ArenaApp
 
 
 class ManualBot(BotBase):
-    def __init__(self, port: int, color: Optional[Tuple[int, int, int]] = None, ws_port: Optional[int] = None):
+    def __init__(self, port: int, color: Optional[Tuple[int, int, int]] = None, ws_port: Optional[int] = None,
+                 raw_updates_port: Optional[int] = None):
         super().__init__(color=color)
 
         if not ws_port:
             ws_port = port + 1
 
+        if not raw_updates_port:
+            raw_updates_port = ws_port + 1
+
         self._port = port
         self._ws_port = ws_port
+        self._raw_updates_port = raw_updates_port
 
         self._initialized = False
 
@@ -24,7 +29,8 @@ class ManualBot(BotBase):
     def _play(self):
         if not self._initialized:
             self._initialized = True
-            app = ArenaApp(self._raw_game, "127.0.0.1", self._port, self._ws_port, "Manual Bot Control Web")
+            app = ArenaApp(self._raw_game, "127.0.0.1", self._port, self._ws_port, self._raw_updates_port,
+                           "Manual Bot Control Web")
             app.register_control_callback(self._controll_callback)
             app.run_async()
             print(f"MANUAL CONTROL WEB FOR `{self.player_id}` RUNNING ON: http://127.0.0.1:{self._port}/game")

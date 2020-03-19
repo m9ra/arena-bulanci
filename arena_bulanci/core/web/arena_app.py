@@ -9,7 +9,8 @@ from typing import Dict
 from flask import Flask, render_template
 from flask_bootstrap import Bootstrap
 
-from arena_bulanci.core.config import REMOTE_ARENA_WEB_PORT, REMOTE_ARENA_GAME_UPDATES_PORT, TICKS_PER_SECOND
+from arena_bulanci.core.config import REMOTE_ARENA_WEB_PORT, REMOTE_ARENA_GAME_UPDATES_PORT, TICKS_PER_SECOND, \
+    REMOTE_ARENA_RAW_UPDATES_PORT
 from arena_bulanci.core.game import Game
 from arena_bulanci.core.utils import jsondumps, jsonloads, format_elapsed_time
 from arena_bulanci.core.web.game_update_server import GameUpdateServer
@@ -17,11 +18,13 @@ from arena_bulanci.core.web.user_stats import UserStats
 
 
 class ArenaApp(object):
-    def __init__(self, game: Game, host: str, web_port: int, game_updates_port: int, arena_name: str):
+    def __init__(self, game: Game, host: str, web_port: int, game_updates_port: int, raw_updates_port: int,
+                 arena_name: str):
         self._game = game
         self._host = host
         self._web_port = web_port
         self._game_updates_port = game_updates_port
+        self._raw_updates_port = raw_updates_port
         self._arena_name = arena_name
 
         self._control_callback = None
@@ -53,7 +56,7 @@ class ArenaApp(object):
 
     def _start_game_updates(self):
         self._is_running = True
-        server = GameUpdateServer(self._game, self._host, self._game_updates_port)
+        server = GameUpdateServer(self._game, self._host, self._game_updates_port, self._raw_updates_port)
         server.on_kill_registered = self._kill_handler
         server.on_shot_registered = self._shot_handler
         server.on_connection_stats_registered = self._connection_stats_handler
@@ -163,5 +166,8 @@ if __name__ == "__main__":
     arena_game = Game()
     Thread(target=_game_worker, args=[arena_game], daemon=True).start()
 
-    arena_app = ArenaApp(arena_game, '0.0.0.0', REMOTE_ARENA_WEB_PORT, REMOTE_ARENA_GAME_UPDATES_PORT, sys.argv[1])
+    arena_app = ArenaApp(
+        arena_game, '0.0.0.0', REMOTE_ARENA_WEB_PORT, REMOTE_ARENA_GAME_UPDATES_PORT, REMOTE_ARENA_RAW_UPDATES_PORT,
+        sys.argv[1]
+    )
     arena_app.run_blocking()

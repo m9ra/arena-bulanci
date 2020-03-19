@@ -1,23 +1,22 @@
-import asyncio
 import datetime
 import gc
 from time import sleep
 from typing import List
 
-import websockets
-
 from arena_bulanci.bots.bot_base import BotBase
 from arena_bulanci.core.config import LOCAL_ARENA_GAME_UPDATES_PORT, LOCAL_ARENA_WEB_PORT, TICKS_PER_SECOND, \
-    REMOTE_ARENA_GAME_UPDATES_PORT, REMOTE_ARENA_HOSTNAME
+    REMOTE_ARENA_GAME_UPDATES_PORT, REMOTE_ARENA_HOSTNAME, LOCAL_ARENA_RAW_UPDATES_PORT
 from arena_bulanci.core.game import Game
 from arena_bulanci.core.game_updates.error import ErrorUpdate
+from arena_bulanci.core.networking.socket_client import SocketClient
 from arena_bulanci.core.utils import jsondumps, jsonloads, validate_email
 from arena_bulanci.core.web.arena_app import ArenaApp
 
 
 def run_local_game(bots: List[BotBase], simulate_real_delay=True):
     game = Game(verbose=False)
-    app = ArenaApp(game, '127.0.0.1', LOCAL_ARENA_WEB_PORT, LOCAL_ARENA_GAME_UPDATES_PORT, "Local Arena")
+    app = ArenaApp(game, '127.0.0.1', LOCAL_ARENA_WEB_PORT, LOCAL_ARENA_GAME_UPDATES_PORT, LOCAL_ARENA_RAW_UPDATES_PORT,
+                   "Local Arena")
     app.run_async()
 
     # made up bot names
@@ -51,23 +50,20 @@ def run_local_game(bots: List[BotBase], simulate_real_delay=True):
 
 def run_remote_arena_game(bot: BotBase, username: str, print_skipped_tick_info: bool = True,
                           print_think_time: bool = False):
-    # connect to arena
-    asyncio.get_event_loop().run_until_complete(
-        _run_remote_arena_game(bot, username, print_skipped_tick_info=print_skipped_tick_info,
-                               print_think_time=print_think_time)
-    )
+    _run_remote_arena_game(bot, username, print_skipped_tick_info=print_skipped_tick_info,
+                           print_think_time=print_think_time)
 
 
-async def _run_remote_arena_game(bot: BotBase, username: str, reconnect=True, print_skipped_tick_info=True,
-                                 print_think_time=False):
+def _run_remote_arena_game(bot: BotBase, username: str, reconnect=True, print_skipped_tick_info=True,
+                           print_think_time=False):
     while True:
         try:
-            await _play_remote_game(bot, username, print_skipped_tick_info=print_skipped_tick_info,
-                                    print_think_time=print_think_time)
-        except (ConnectionRefusedError, websockets.ConnectionClosedError):
+            _raw_play_remote_game(bot, username, print_skipped_tick_info=print_skipped_tick_info,
+                                  print_think_time=print_think_time)
+        except (ConnectionResetError):
             if reconnect:
                 print("Disconnected, trying to reconnect")
-                await asyncio.sleep(5)
+                sleep(5)
                 continue
 
             else:
@@ -75,53 +71,54 @@ async def _run_remote_arena_game(bot: BotBase, username: str, reconnect=True, pr
                 break
 
 
-async def _play_remote_game(bot: BotBase, username: str, print_skipped_tick_info=True, print_think_time=False):
+def _raw_play_remote_game(bot: BotBase, username: str, print_skipped_tick_info=True, print_think_time=False):
     bot.player_id = username
     validate_email(username)
 
-    uri = f"ws://{REMOTE_ARENA_HOSTNAME}:{REMOTE_ARENA_GAME_UPDATES_PORT}/game"
-    loop = asyncio.get_event_loop()
-    async with websockets.connect(uri) as websocket:
-        await websocket.send(jsondumps({"player_id": username, "version": "1.0.3"}))
-        initial_data_str = await websocket.recv()
-        print(f"Player {username} connected")
-        data = jsonloads(initial_data_str)
+    client = SocketClient()
+    client.connect(REMOTE_ARENA_HOSTNAME, REMOTE_ARENA_GAME_UPDATES_PORT + 1)
+    client.send_string(jsondumps({"player_id": username, "version": "1.0.3"}))
+    initial_data_str = client.read_string()
+    print(f"Player {username} connected")
+    data = jsonloads(initial_data_str)
 
-        await websocket.send(jsondumps(None))  # send first update empty
+    client.send_string(jsondumps(None))  # send first update empty
 
-        game: Game = data["state"]
-        game._tick_subscribers = []
-        bot._raw_game = game
-        while game.is_running:
-            update_data_str = await websocket.recv()
-            start = datetime.datetime.now()
+    game: Game = data["state"]
+    game._tick_subscribers = []
+    bot._raw_game = game
+    while game.is_running:
+        update_data_str = client.read_string()
+        start = datetime.datetime.now()
+        if update_data_str is None:
+            raise ConnectionResetError("Connection was closed")
 
-            if update_data_str == "disconnected":
-                raise AssertionError("Connection was ended because of other connection with the same id.")
+        if update_data_str == "disconnected":
+            raise AssertionError("Connection was ended because of other connection with the same id.")
 
-            update_groups = jsonloads(update_data_str)
+        update_groups = jsonloads(update_data_str)
 
-            for update_group in update_groups:
-                updates = update_group["updates"]
-                for update in updates:
-                    if isinstance(update, ErrorUpdate) and update._player_id == bot.player_id:
-                        print("ERROR: ", update.error)
+        for update_group in update_groups:
+            updates = update_group["updates"]
+            for update in updates:
+                if isinstance(update, ErrorUpdate) and update._player_id == bot.player_id:
+                    print("ERROR: ", update.error)
 
-            is_first = True
-            for update_group in update_groups:
-                if not is_first and print_skipped_tick_info:
-                    print(f"INFO: Skipping tick: {game.tick}")
-                is_first = False
+        is_first = True
+        for update_group in update_groups:
+            if not is_first and print_skipped_tick_info:
+                print(f"INFO: Skipping tick: {game.tick}")
+            is_first = False
 
-                game.external_step(update_group["updates"])
-                if game.tick != update_group["tick"]:
-                    raise AssertionError("FATAL ERROR: Tick update was missed")
+            game.external_step(update_group["updates"])
+            if game.tick != update_group["tick"]:
+                raise AssertionError("FATAL ERROR: Tick update was missed")
 
-            update_request = bot.pop_update_request(game)
-            update_request_str = jsondumps(update_request)
+        update_request = bot.pop_update_request(game)
+        update_request_str = jsondumps(update_request)
 
-            await websocket.send(update_request_str)
-            gc.collect(generation=0)
-            end = datetime.datetime.now()
-            if print_think_time:
-                print(f"Think time: {(end - start).total_seconds() * 1000:.2f}")
+        client.send_string(update_request_str)
+        gc.collect(generation=0)
+        end = datetime.datetime.now()
+        if print_think_time:
+            print(f"Think time: {(end - start).total_seconds() * 1000:.2f}")
