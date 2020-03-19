@@ -114,11 +114,24 @@ def _raw_play_remote_game(bot: BotBase, username: str, print_skipped_tick_info=T
             if game.tick != update_group["tick"]:
                 raise AssertionError("FATAL ERROR: Tick update was missed")
 
+        before_think_time = datetime.datetime.now()
         update_request = bot.pop_update_request(game)
         update_request_str = jsondumps(update_request)
 
+        before_send_time = datetime.datetime.now()
         client.send_string(update_request_str)
+        before_gc_time = datetime.datetime.now()
         gc.collect(generation=0)
         end = datetime.datetime.now()
+        duration = (end - start).total_seconds()
+        if (1.0 / TICKS_PER_SECOND) - duration < 0.02:
+            print(
+                f"WARN: Think time: {duration * 1000:.2f}ms at tick: {game.tick}. Before think: {duration_format(start, before_think_time)}, before send: {duration_format(start, before_send_time)}, before gc: {duration_format(start, before_gc_time)}. ")
+
+
         if print_think_time:
-            print(f"Think time: {(end - start).total_seconds() * 1000:.2f}")
+            print(f"Think time: {duration * 1000:.2f}ms")
+
+
+def duration_format(start, end):
+    return f"{(end - start).total_seconds() * 1000:.2f}ms"

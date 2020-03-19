@@ -1,5 +1,6 @@
 import random
 from concurrent.futures.thread import ThreadPoolExecutor
+from threading import Event
 from typing import Tuple, List
 
 from arena_bulanci.bots.bot_base_low_level import BotBaseLowLevel
@@ -122,15 +123,17 @@ class BotBase(BotBaseLowLevel):
         """
         self._add_update_request(PlayerMoveRequest(self.player_id))
 
-    def MOVE_go_towards(self, target: Tuple[int, int]):
+    def MOVE_go_towards(self, target: Tuple[int, int], wait_time_ms: int = 0):
         """
         Enqueues a composition of rotation and step moves in order to get to given position from current position.
         At most three moves are enqueued at a single time.
         Uses shortest path planning + simple fallback in order to be real time processing friendly.
 
+        Allows specifying wait time (in which the plan can be calculated before fallback)
+
         Getting stuck at temporary obstacles (i.e. other players) is solved by adding random steps and rotations.
         """
-        if not self._try_move_towards_by_plan(target):
+        if not self._try_move_towards_by_plan(target, wait_time_ms=wait_time_ms):
             self._simple_move_towards(target)
 
     def MOVE_rotate_randomly(self):
@@ -208,7 +211,7 @@ class BotBase(BotBaseLowLevel):
         else:
             self.MOVE_rotate(walk_direction)
 
-    def _try_move_towards_by_plan(self, target: Tuple[int, int]):
+    def _try_move_towards_by_plan(self, target: Tuple[int, int], wait_time_ms: int = 0):
         if target not in self._position_plans:
             if len(self._position_plans) > MAX_CACHED_PLANS:
                 # free up some memory, because there were too many plans created
@@ -217,12 +220,24 @@ class BotBase(BotBaseLowLevel):
 
             self._position_plans[target] = None  # allocate slot for the plan
 
+            if wait_time_ms:
+                wait_event = Event()
+            else:
+                wait_event = None
+
             def _create_plan_async():
                 plan = GamePlan.plan_route_to_targets([target], stop_position=self.position)
                 self._position_plans[target] = plan
+                if wait_event:
+                    wait_event.set()
 
             PLAN_EXECUTOR.submit(_create_plan_async)
-            return False
+            if wait_time_ms:
+                wait_event.wait(timeout=wait_time_ms / 1000.0)
+
+            if target not in self._position_plans:
+                # waiting was not helpful
+                return False
 
         plan = self._position_plans[target]
         if plan is None:
