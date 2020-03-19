@@ -9,6 +9,9 @@ class SocketClient(object):
         self._L_send = Lock()
         self._L_read = Lock()
         self._socket = socket
+        if self._socket is not None:
+            self._socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+
         self._is_connected = socket is not None
 
     @property
@@ -17,6 +20,7 @@ class SocketClient(object):
 
     def connect(self, host, port):
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self._socket.connect((host, port))
         self._is_connected = True
 
