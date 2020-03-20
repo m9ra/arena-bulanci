@@ -200,14 +200,19 @@ class BotBase(BotBaseLowLevel):
         The default strategy is implemented here.
         Feel free to include your own.
         """
+
+        future_requests = []
         if self._update_requests:
-            return self._update_requests[0:MAX_FUTURE_UPDATE_REQUESTS]
+            future_requests.extend(self._update_requests[0:MAX_FUTURE_UPDATE_REQUESTS])
 
-        if isinstance(current_request, PlayerMoveRequest):
+        last_request = current_request if not future_requests else future_requests[-1]
+        if len(future_requests) < 5 and isinstance(last_request, PlayerMoveRequest):
             # keep moving in case of temporary tick drops
-            return [current_request, current_request, current_request, current_request, current_request]
+            future_requests.extend(
+                [current_request, current_request, current_request, current_request, current_request]
+            )
 
-        return []
+        return future_requests
 
     def _simple_move_towards(self, target: Tuple[int, int]):
         d = DIRECTION_DEFINITIONS[self.direction]
