@@ -3,10 +3,11 @@ import socket
 import threading
 from datetime import datetime
 from threading import Thread, Lock
-from typing import List, Set, Dict, Any
+from typing import List, Set, Dict, Any, Optional
 
 import websockets
 
+from arena_bulanci.core.config import MAX_FUTURE_UPDATE_REQUESTS
 from arena_bulanci.core.game import Game
 from arena_bulanci.core.game_updates.add_bullet import AddBullet
 from arena_bulanci.core.game_updates.error import ErrorUpdate
@@ -40,7 +41,8 @@ class GameUpdateServer(object):
 
         self._L_game = Lock()
         self._raw_game_pulse_event = threading.Event()
-        self._player_requests: Dict[str, GameUpdateRequest] = {}
+        self._player_requests: Dict[str, Optional[List[GameUpdateRequest]]] = {}
+        self._is_future_request: Dict[str, bool] = {}
         self._player_updates: Dict[str, List[Dict[str, Any]]] = {}
 
     def start(self):
@@ -60,21 +62,25 @@ class GameUpdateServer(object):
 
     def _pretick_handler(self):
         self._update_roundtrip_start = datetime.now()
-        requests = []
+        collected_requests = []
         with self._L_game:
             self._current_tick_update_ready_clients = list(self._update_ready_clients)
             self._update_ready_clients.clear()
 
-            for player_id, request in self._player_requests.items():
+            for player_id, requests in self._player_requests.items():
+                if not requests:
+                    continue
+
+                request = requests.pop(0)
                 if not request:
                     continue
 
                 request.player_id = player_id
-                requests.append(request)
+                if not self._is_future_request[player_id]:
+                    self._is_future_request[player_id] = True  # next request will be a future request if not replaced
+                    collected_requests.append(request)
 
-                self._player_requests[player_id] = None
-
-        self._game.accept(requests)
+        self._game.accept(collected_requests)
 
     def _tick_handler(self, game_updates: List[GameUpdate]):
         for update in game_updates:
@@ -93,8 +99,15 @@ class GameUpdateServer(object):
         }
 
         # report updates
-        for updates_group in self._player_updates.values():
+        for player_id, updates_group in list(self._player_updates.items()):
             updates_group.append(update_group)
+            if len(updates_group) > 100:
+                print(f"Player {player_id} was not responding for too long. Disconnecting.")
+                self._player_updates.pop(player_id)
+                client = self._player_to_client.get(player_id)
+                if client:
+                    client.disconnect()
+
 
         for client in self._current_tick_update_ready_clients:
             player_id = client.player_id
@@ -179,8 +192,8 @@ class GameUpdateServer(object):
             client_socket, addr = s.accept()
             Thread(target=self._raw_game_play_handler, args=[client_socket, addr], daemon=True).start()
 
-    def _raw_handle_player_connection(self, player_id: str, client: SocketClient):
-        print(f"PLAYER CONNECTED: {player_id}")
+    def _raw_handle_player_connection(self, player_id: str, version: str, client: SocketClient):
+        print(f"PLAYER CONNECTED: {player_id}, version: {version}")
 
         if player_id in self._player_to_client and self._player_to_client[player_id]:
             self._player_to_client[player_id].send_string("disconnected")
@@ -190,6 +203,11 @@ class GameUpdateServer(object):
 
     def _raw_handle_player_disconnection(self, player_id: str, client: SocketClient):
         print(f"PLAYER DISCONNECTED {player_id}")
+
+        with self._L_game:
+            self._player_requests[player_id] = None
+            self._player_updates.pop(player_id, None)
+            self._is_future_request.pop(player_id, None)
 
         if self._player_to_client.get(player_id) == client:
             self._player_to_client[player_id] = None
@@ -220,17 +238,29 @@ class GameUpdateServer(object):
             client.player_id = player_id
 
             with self._L_game:
+                self._is_future_request[player_id] = False
                 self._player_requests[player_id] = None
                 self._player_updates[player_id] = []
 
             client.send_string(self._get_full_state_data())
-            self._raw_handle_player_connection(player_id, client)
+            self._raw_handle_player_connection(player_id, version, client)
 
             ping_start = datetime.now()
             while client.is_connected:
                 message = client.read_string()
+                if message is None:
+                    break  # client disconnected
+
                 update_request = jsonloads(message)
+
+                if isinstance(update_request, list):
+                    if len(update_request) > MAX_FUTURE_UPDATE_REQUESTS + 1:
+                        raise ValueError(f"Too long update request sent, with length {len(update_request)}")
+                else:
+                    update_request = [update_request]
+
                 with self._L_game:
+                    self._is_future_request[player_id] = False
                     self._player_requests[player_id] = update_request
                     self._update_ready_clients.append(client)
 

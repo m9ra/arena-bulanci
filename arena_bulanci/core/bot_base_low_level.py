@@ -7,7 +7,7 @@ from arena_bulanci.bots.game_plan import GamePlan
 from arena_bulanci.core.game import Game
 from arena_bulanci.core.game_updates.game_update_request import GameUpdateRequest
 from arena_bulanci.core.game_updates.player_spawn_request import PlayerSpawnRequest
-from arena_bulanci.core.utils import install_kill_on_exception_in_any_thread
+from arena_bulanci.core.utils import install_kill_on_exception_in_any_thread, jsondumps
 
 
 class BotBaseLowLevel(object):
@@ -86,6 +86,24 @@ class BotBaseLowLevel(object):
         update = self._update_requests.pop(0)
         update.tick = game.tick
         return update
+
+    def try_pop_by_future_request(self, future_request: GameUpdateRequest) -> Optional[GameUpdateRequest]:
+        """
+        When future request is used, it means that game tick was missed.
+        However, there is a chance that bot would do the same thing regardless.
+        In such a case, the currently enqueued request should be popped (so, bot is not repeating a move)
+
+        """
+
+        if not self._update_requests:
+            return None  # there is nothing to compare against
+
+        intended_update_request = self._update_requests[0]
+
+        if jsondumps(intended_update_request) == jsondumps(future_request):
+            return self._update_requests.pop(0)
+        else:
+            return None
 
     def _add_update_request(self, request: GameUpdateRequest):
         """

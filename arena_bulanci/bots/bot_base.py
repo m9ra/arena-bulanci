@@ -3,9 +3,11 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from threading import Event
 from typing import Tuple, List
 
-from arena_bulanci.bots.bot_base_low_level import BotBaseLowLevel
 from arena_bulanci.bots.game_plan import GamePlan
+from arena_bulanci.core.bot_base_low_level import BotBaseLowLevel
+from arena_bulanci.core.config import MAX_FUTURE_UPDATE_REQUESTS
 from arena_bulanci.core.game import Game
+from arena_bulanci.core.game_updates.game_update_request import GameUpdateRequest
 from arena_bulanci.core.game_updates.player_move_request import PlayerMoveRequest
 from arena_bulanci.core.game_updates.player_rotation_request import PlayerRotationRequest
 from arena_bulanci.core.game_updates.shoot_request import ShootRequest
@@ -189,6 +191,23 @@ class BotBase(BotBaseLowLevel):
             result.append((opponent, shooting_direction))
 
         return result
+
+    def follow_with_future_requests(self, current_request: GameUpdateRequest) -> List[GameUpdateRequest]:
+        """
+        Every move request can be sent together with potential followup requests.
+        This will prevent game tick drops due to network lag etc.
+
+        The default strategy is implemented here.
+        Feel free to include your own.
+        """
+        if self._update_requests:
+            return self._update_requests[0:MAX_FUTURE_UPDATE_REQUESTS]
+
+        if isinstance(current_request, PlayerMoveRequest):
+            # keep moving in case of temporary tick drops
+            return [current_request, current_request, current_request, current_request, current_request]
+
+        return []
 
     def _simple_move_towards(self, target: Tuple[int, int]):
         d = DIRECTION_DEFINITIONS[self.direction]

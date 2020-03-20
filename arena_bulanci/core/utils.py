@@ -1,6 +1,6 @@
 import math
 import re
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List
 
 import jsonpickle
 import threading
@@ -9,6 +9,9 @@ import traceback
 import os
 import signal
 
+from arena_bulanci.core.config import MAP_WIDTH, MAP_HEIGHT
+
+DIRECTIONS = [0, 1, 2, 3]
 DIRECTION_DEFINITIONS = [(0, 1), (0, -1), (1, 0), (-1, 0)]
 DIRECTION_LOOKUP = dict(zip(DIRECTION_DEFINITIONS, range(len(DIRECTION_DEFINITIONS))))
 
@@ -17,7 +20,27 @@ ROTATION_180 = [1, 0, 3, 2]
 HORIZONTAL_DIRECTIONS = [2, 3]
 VERTICAL_DIRECTIONS = [0, 1]
 
-def has(value): return value is not None
+
+def is_in_map(position: Tuple[int, int]) -> bool:
+    return 0 <= position[0] < MAP_WIDTH and 0 <= position[1] < MAP_HEIGHT
+
+
+def get_square_points(center: Tuple[int, int], edge: int) -> List[Tuple[int, int]]:
+    result = []
+    maxx = min(MAP_WIDTH, center[0] + edge)
+    maxy = min(MAP_HEIGHT, center[1] + edge)
+    minx = max(0, center[0] - edge)
+    miny = max(0, center[1] - edge)
+
+    for x in range(minx, maxx):
+        for y in range(miny, maxy):
+            result.append((x, y))
+
+    return result
+
+
+def has(value):
+    return value is not None
 
 
 def sign(v):
@@ -70,9 +93,9 @@ def closest_direction_towards(p: Tuple[int, int], o: Tuple[int, int]) -> int:
 
     return DIRECTION_LOOKUP[direction_coords]
 
+
 def is_orthogonal(dir1, dir2):
     return (dir1 in HORIZONTAL_DIRECTIONS) != (dir2 in HORIZONTAL_DIRECTIONS)
-
 
 
 def jsonloads(json_str):

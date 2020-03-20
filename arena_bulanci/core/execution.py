@@ -1,5 +1,6 @@
 import datetime
 import gc
+from collections import defaultdict
 from time import sleep
 from typing import List
 
@@ -56,11 +57,14 @@ def run_remote_arena_game(bot: BotBase, username: str, print_skipped_tick_info: 
 
 def _run_remote_arena_game(bot: BotBase, username: str, reconnect=True, print_skipped_tick_info=True,
                            print_think_time=False):
+    statistics = defaultdict(int)
+
     while True:
         try:
-            _raw_play_remote_game(bot, username, print_skipped_tick_info=print_skipped_tick_info,
+            statistics["connection_count"] += 1
+            _raw_play_remote_game(bot, username, statistics, print_skipped_tick_info=print_skipped_tick_info,
                                   print_think_time=print_think_time)
-        except (ConnectionAbortedError, ConnectionRefusedError):
+        except (ConnectionAbortedError, ConnectionRefusedError, ConnectionResetError, ConnectionError):
             if reconnect:
                 print("Disconnected, trying to reconnect")
                 sleep(5)
@@ -71,19 +75,22 @@ def _run_remote_arena_game(bot: BotBase, username: str, reconnect=True, print_sk
                 break
 
 
-def _raw_play_remote_game(bot: BotBase, username: str, print_skipped_tick_info=True, print_think_time=False):
+def _raw_play_remote_game(bot: BotBase, username: str, statistics: defaultdict, print_skipped_tick_info=True,
+                          print_think_time=False):
+
     bot.player_id = username
     validate_email(username)
 
     client = SocketClient()
     client.connect(REMOTE_ARENA_HOSTNAME, REMOTE_ARENA_GAME_UPDATES_PORT + 1)
-    client.send_string(jsondumps({"player_id": username, "version": "1.0.3"}))
+    client.send_string(jsondumps({"player_id": username, "version": "1.0.4"}))
     initial_data_str = client.read_string()
     print(f"Player {username} connected")
     data = jsonloads(initial_data_str)
 
     client.send_string(jsondumps(None))  # send first update empty
 
+    _future_requests = []
     game: Game = data["state"]
     game._tick_subscribers = []
     bot._raw_game = game
@@ -106,16 +113,31 @@ def _raw_play_remote_game(bot: BotBase, username: str, print_skipped_tick_info=T
 
         is_first = True
         for update_group in update_groups:
-            if not is_first and print_skipped_tick_info:
-                print(f"INFO: Skipping tick: {game.tick}")
-            is_first = False
+            if is_first:
+                statistics["ticks"] += 1
+                is_first = False
+            else:
+                if _future_requests:
+                    statistics["future_requests_used"] += 1
+                    future_request = _future_requests.pop(0)
+                    if bot.try_pop_by_future_request(future_request):
+                        statistics["correct_future_requests"] += 1
+                    else:
+                        statistics["incorrect_future_requests"] += 1
+                else:
+                    statistics["skipped_ticks"] += 1
+                    if print_skipped_tick_info:
+                        print(f"INFO: Skipping tick: {game.tick}")
 
             game.external_step(update_group["updates"])
             if game.tick != update_group["tick"]:
                 raise AssertionError("FATAL ERROR: Tick update was missed")
 
         before_think_time = datetime.datetime.now()
-        update_request = bot.pop_update_request(game)
+        current_update_request = bot.pop_update_request(game)
+        _future_requests = bot.follow_with_future_requests(current_update_request)
+
+        update_request = [current_update_request] + _future_requests
         update_request_str = jsondumps(update_request)
 
         before_send_time = datetime.datetime.now()
