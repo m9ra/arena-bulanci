@@ -9,7 +9,11 @@
     <div class="row">
         <div class="col-md-12">
             <div class="head">
-                <h1>Arena: <b>{{arena}}</b></h1>
+                <div>
+                    <div style="float:left">
+                        <h1>Arena: <b>{{arena}}</b></h1>
+                    </div>
+                </div>
 
             </div>
 
@@ -20,6 +24,10 @@
         <script language="JavaScript">
             function loadTable() {
                 $('#results_table').load('/results_table');
+            }
+
+            function setValue(id, value) {
+                $('#' + id).text(value);
             }
 
             setInterval(loadTable, 1000);

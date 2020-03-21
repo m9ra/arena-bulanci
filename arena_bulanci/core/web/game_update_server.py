@@ -25,6 +25,7 @@ class GameUpdateServer(object):
         self._port = port
         self._raw_updates_port = raw_updates_port
         self._update_roundtrip_start = None
+        self.roundtrip_update_time = 0
 
         self._full_state_subscribers: Set[websockets] = set()
         self._player_to_client: Dict[str, SocketClient] = {}
@@ -119,9 +120,9 @@ class GameUpdateServer(object):
             except Exception as e:
                 print(f"sending updates to player_id: {player_id} failed: {repr(e)}")
 
-        update_time = datetime.now() - self._update_roundtrip_start
-        if update_time.total_seconds() > 0.035:
-            print(f"WARN: Update roundtrip: {update_time.total_seconds() * 1000:.2f}ms")
+        self.roundtrip_update_time = (datetime.now() - self._update_roundtrip_start).total_seconds()
+        if self.roundtrip_update_time > 0.035:
+            print(f"WARN: Update roundtrip: {self.roundtrip_update_time * 1000:.2f}ms")
 
         with self._L_game:
             # make the pulse locked - this way, no update requests can be lost

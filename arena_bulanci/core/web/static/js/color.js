@@ -28,7 +28,7 @@ function shiftColor(img, color) {
         myData.data[i + 3] = 255;
 
 
-        let hsl = rgbToHSL(rgbToHex(r, g, b));
+        let hsl = rgbToHSL_direct(r / 255.0, g / 255.0, b / 255.0);
         if (!(hsl.h > 110 && hsl.h <= 125))
             continue;
 
@@ -38,8 +38,7 @@ function shiftColor(img, color) {
         hsl.l = Math.min(1.0, hsl.l);
         hsl.s = Math.min(1.0, hsl.s);
 
-        let rgbHex = hslToRGB(hsl);
-        let res = hexToRgb(rgbHex);
+        let res = hslToRGB_direct(hsl);
         res = [res.r, res.g, res.b];
         //res = [0, 0, 0];
 
@@ -83,25 +82,30 @@ function rgbToHSL(rgb) {
 
     var r = parseInt(rgb.substr(0, 2), 16) / 255,
         g = parseInt(rgb.substr(2, 2), 16) / 255,
-        b = parseInt(rgb.substr(4, 2), 16) / 255,
-        cMax = Math.max(r, g, b),
+        b = parseInt(rgb.substr(4, 2), 16) / 255;
+
+    return rgbToHSL_direct(r, g, b);
+}
+
+function rgbToHSL_direct(r, g, b) {
+    let cMax = Math.max(r, g, b),
         cMin = Math.min(r, g, b),
         delta = cMax - cMin,
         l = (cMax + cMin) / 2,
         h = 0,
         s = 0;
 
-    if (delta == 0) {
+    if (delta === 0) {
         h = 0;
-    } else if (cMax == r) {
+    } else if (cMax === r) {
         h = 60 * (((g - b) / delta) % 6);
-    } else if (cMax == g) {
+    } else if (cMax === g) {
         h = 60 * (((b - r) / delta) + 2);
     } else {
         h = 60 * (((r - g) / delta) + 4);
     }
 
-    if (delta == 0) {
+    if (delta === 0) {
         s = 0;
     } else {
         s = (delta / (1 - Math.abs(2 * l - 1)))
@@ -115,8 +119,8 @@ function rgbToHSL(rgb) {
 }
 
 // expects an object and returns a string
-function hslToRGB(hsl) {
-    var h = hsl.h,
+function hslToRGB_direct(hsl) {
+    let h = hsl.h,
         s = hsl.s,
         l = hsl.l,
         c = (1 - Math.abs(2 * l - 1)) * s,
@@ -154,7 +158,16 @@ function hslToRGB(hsl) {
     g = normalize_rgb_value(g, m);
     b = normalize_rgb_value(b, m);
 
-    return rgbToHex(r, g, b);
+    return {
+        r: r,
+        g: g,
+        b: b
+    }
+}
+
+function hslToRGB(hsl) {
+    let c = hslToRGB_direct(hsl);
+    return rgbToHex(c.r, c.g, c.b);
 }
 
 function normalize_rgb_value(color, m) {

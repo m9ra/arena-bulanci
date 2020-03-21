@@ -105,7 +105,6 @@ function getSpriteSet() {
         imageObj.isLoaded = false;
         imageObj.onload = function () {
             imageObj.isLoaded = true;
-            console.log("Loaded");
         };
         imageObj.src = `/static/bulanci/d_d3/${('000' + i).substr(-3)}.png`;
         deaths.push(imageObj);

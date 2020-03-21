@@ -30,6 +30,9 @@ class ArenaApp(object):
         self._control_callback = None
         self._is_running = False
         self._user_statistics: Dict[str, UserStats] = {}
+        self._arena_statistics = {"load": 0, "update_delay": 0}
+        self._game_update_server = GameUpdateServer(self._game, self._host, self._game_updates_port,
+                                                    self._raw_updates_port)
 
         self._arena_state_file = self._arena_name + ".state.json"
         if os.path.isfile(self._arena_state_file):
@@ -56,7 +59,7 @@ class ArenaApp(object):
 
     def _start_game_updates(self):
         self._is_running = True
-        server = GameUpdateServer(self._game, self._host, self._game_updates_port, self._raw_updates_port)
+        server = self._game_update_server
         server.on_kill_registered = self._kill_handler
         server.on_shot_registered = self._shot_handler
         server.on_connection_stats_registered = self._connection_stats_handler
@@ -134,7 +137,7 @@ class ArenaApp(object):
         def results_table():
             users = list(arena._user_statistics.values())
             users.sort(key=lambda s: s.rating, reverse=True)
-            return render_template("results_table.html", users=users)
+            return render_template("results_table.html", users=users, stats=self._arena_statistics)
 
         import logging
         log = logging.getLogger('werkzeug')
@@ -143,32 +146,38 @@ class ArenaApp(object):
         print(f"ARENA WEB ON: http://{self._host}:{self._web_port}/")
 
         app.jinja_env.globals.update(format_elapsed_time=format_elapsed_time)
-        app.run(
-            debug=True, use_reloader=False, host=self._host,
-            port=self._web_port,
-        )
+        app.run(debug=True, use_reloader=False, host=self._host, port=self._web_port)
 
+    def start_game_worker(self):
+        Thread(target=self._game_worker, daemon=True).start()
 
-def _game_worker(game: Game):
-    while game.is_running:
-        start = datetime.datetime.now()
-        gc.collect(generation=0)  # clean memory so we run consistent iterations
+    def _game_worker(self):
+        while self._game.is_running:
+            start = datetime.datetime.now()
+            gc.collect()  # clean memory so we run consistent iterations
 
-        game.step(catch_exceptions=True)
-        gc.collect()
-        end = datetime.datetime.now()
+            self._game.step(catch_exceptions=True)
+            end = datetime.datetime.now()
 
-        duration_so_far = (end - start).total_seconds()
-        missing_step_time = max(0.01, 1.0 / TICKS_PER_SECOND - duration_so_far)
-        sleep(missing_step_time)
+            duration_so_far = (end - start).total_seconds()
+            missing_step_time = max(0.01, 1.0 / TICKS_PER_SECOND - duration_so_far)
+
+            load = duration_so_far / (1 / TICKS_PER_SECOND)
+            self._arena_statistics["load"] = self._arena_statistics["load"] * 0.95 + 0.05 * load
+
+            delay = self._game_update_server.roundtrip_update_time
+            self._arena_statistics["update_delay"] = self._arena_statistics["update_delay"] * 0.95 + 0.05 * delay
+
+            sleep(missing_step_time)
 
 
 if __name__ == "__main__":
     arena_game = Game()
-    Thread(target=_game_worker, args=[arena_game], daemon=True).start()
 
     arena_app = ArenaApp(
         arena_game, '0.0.0.0', REMOTE_ARENA_WEB_PORT, REMOTE_ARENA_GAME_UPDATES_PORT, REMOTE_ARENA_RAW_UPDATES_PORT,
         sys.argv[1]
     )
+    arena_app.start_game_worker()
+
     arena_app.run_blocking()
