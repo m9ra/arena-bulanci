@@ -25,6 +25,7 @@ def run_local_game(bots: List[BotBase], simulate_real_delay=True):
         bot.player_id = f"player{i}@mail.domain"
         bot._raw_game = game
 
+    last_updates = None
     while game.is_running:
         iteration_start = datetime.datetime.now()
         bot_updates = []
@@ -32,13 +33,13 @@ def run_local_game(bots: List[BotBase], simulate_real_delay=True):
         # collect  update requests from bots
         for bot in bots:
             game_copy = game.copy_without_internal_data()
-            update_request = bot.pop_update_request(game_copy)
+            update_request = bot.pop_update_request(game_copy, last_updates)
             if update_request:
                 bot_updates.append(update_request)
 
         # run game steps
         game.accept(bot_updates)
-        game.step(catch_exceptions=False)
+        last_updates = game.step(catch_exceptions=False)
         iteration_end = datetime.datetime.now()
 
         iteration_duration = (iteration_end - iteration_start).total_seconds()
@@ -93,6 +94,7 @@ def _raw_play_remote_game(bot: BotBase, username: str, statistics: defaultdict, 
     _future_requests = []
     game: Game = data["state"]
     game._tick_subscribers = []
+    game._pretick_subscribers = []
     bot._raw_game = game
     while game.is_running:
         update_data_str = client.read_string()
@@ -112,6 +114,7 @@ def _raw_play_remote_game(bot: BotBase, username: str, statistics: defaultdict, 
                     print("ERROR: ", update.error)
 
         is_first = True
+        last_updates = []
         for update_group in update_groups:
             if is_first:
                 statistics["ticks"] += 1
@@ -129,13 +132,14 @@ def _raw_play_remote_game(bot: BotBase, username: str, statistics: defaultdict, 
                     if print_skipped_tick_info:
                         print(f"INFO: Skipping tick: {game.tick}")
 
+            last_updates.extend(update_group["updates"])
             game.external_step(update_group["updates"])
             if game.tick != update_group["tick"]:
                 raise AssertionError("FATAL ERROR: Tick update was missed")
 
         before_think_time = datetime.datetime.now()
-        current_update_request = bot.pop_update_request(game)
-        _future_requests = bot.follow_with_future_requests(current_update_request)
+        current_update_request = bot.pop_update_request(game, last_updates)
+        _future_requests = bot.get_future_requests(current_update_request)
 
         update_request = [current_update_request] + _future_requests
         update_request_str = jsondumps(update_request)

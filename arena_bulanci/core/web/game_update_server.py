@@ -120,9 +120,10 @@ class GameUpdateServer(object):
             except Exception as e:
                 print(f"sending updates to player_id: {player_id} failed: {repr(e)}")
 
-        self.roundtrip_update_time = (datetime.now() - self._update_roundtrip_start).total_seconds()
-        if self.roundtrip_update_time > 0.035:
-            print(f"WARN: Update roundtrip: {self.roundtrip_update_time * 1000:.2f}ms")
+        if self._update_roundtrip_start:
+            self.roundtrip_update_time = (datetime.now() - self._update_roundtrip_start).total_seconds()
+            if self.roundtrip_update_time > 0.035:
+                print(f"WARN: Update roundtrip: {self.roundtrip_update_time * 1000:.2f}ms")
 
         with self._L_game:
             # make the pulse locked - this way, no update requests can be lost
@@ -132,11 +133,19 @@ class GameUpdateServer(object):
         if self._full_state_subscribers:
             full_state_data = self._get_full_state_data()
             asyncio.run_coroutine_threadsafe(
-                asyncio.wait([subscriber.send(full_state_data) for subscriber in self._full_state_subscribers]),
+                asyncio.wait([self._send_full_state_data(subscriber, full_state_data) for subscriber in
+                              self._full_state_subscribers]),
                 self._loop
             )
 
         self._last_tick_time = datetime.now()
+
+    async def _send_full_state_data(self, subscriber, full_state_data):
+        try:
+            await subscriber.send(full_state_data)
+        except Exception as e:
+            print(f"_send_full_state_data {subscriber} {repr(e)}")
+            self._full_state_subscribers.discard(subscriber)
 
     async def _client_handler(self, websocket, path):
         print(f"_client_handler({websocket}, {path})")

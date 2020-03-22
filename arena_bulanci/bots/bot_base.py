@@ -59,6 +59,12 @@ class BotBase(BotBaseLowLevel):
         """Callback called when bot gets killed"""
         pass  # nothing to do by default
 
+    def _on_kill_registered(self, killing_player_id: str, killed_player_id: str, bullet_id: str):
+        """
+        Callback called when a killing player kills another player with the bullet
+        """
+        pass  # nothing to do by default
+
     @property
     def game(self) -> Game:
         """
@@ -192,7 +198,7 @@ class BotBase(BotBaseLowLevel):
 
         return result
 
-    def follow_with_future_requests(self, current_request: GameUpdateRequest) -> List[GameUpdateRequest]:
+    def get_future_requests(self, current_request: GameUpdateRequest) -> List[GameUpdateRequest]:
         """
         Every move request can be sent together with potential followup requests.
         This will prevent game tick drops due to network lag etc.

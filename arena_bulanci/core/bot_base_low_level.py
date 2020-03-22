@@ -1,12 +1,13 @@
 import random
 from queue import Queue
-from threading import Thread
 from typing import Tuple, Optional, List, Dict
 
 from arena_bulanci.bots.game_plan import GamePlan
 from arena_bulanci.core.game import Game
+from arena_bulanci.core.game_updates.game_update import GameUpdate
 from arena_bulanci.core.game_updates.game_update_request import GameUpdateRequest
 from arena_bulanci.core.game_updates.player_spawn_request import PlayerSpawnRequest
+from arena_bulanci.core.game_updates.remove_bullet import RemoveBullet
 from arena_bulanci.core.utils import install_kill_on_exception_in_any_thread, jsondumps
 
 
@@ -46,6 +47,12 @@ class BotBaseLowLevel(object):
         """Callback called when bot gets killed"""
         pass  # nothing to do by default
 
+    def _on_kill_registered(self, killing_player_id: str, killed_player_id: str, bullet_id: str):
+        """
+        Callback called when a killing player kills another player with the bullet
+        """
+        pass  # nothing to do by default
+
     def get_update_request_async(self, game: Game, callback):
         """
         Should be called only by the core package.
@@ -54,12 +61,14 @@ class BotBaseLowLevel(object):
         self._update_request_callback = callback
         self._incoming_updates.put(game.copy_without_internal_data())
 
-    def pop_update_request(self, game: Game) -> GameUpdateRequest:
+    def pop_update_request(self, game: Game, updates: List[GameUpdate]) -> GameUpdateRequest:
         """
         Should be called only by the core package.
         Pops a single update request.
         """
         self._game = game
+
+        self._register_updates(updates)
 
         if game.player_is_spawned(self.player_id):
             if self._waits_for_spawn:
@@ -110,3 +119,8 @@ class BotBaseLowLevel(object):
         Adds update request to a queue which will be sent (one request at a time) to the arena.
         """
         self._update_requests.append(request)
+
+    def _register_updates(self, updates: List[GameUpdate]):
+        for update in updates:
+            if isinstance(update, RemoveBullet):
+                self._on_kill_registered(update.reward_receiver_id, update.hit_player_id, update._bullet_id)
