@@ -37,20 +37,236 @@ class Game(object):
         self._pretick_subscribers = []
 
     @property
-    def tick(self):
+    def tick(self) -> int:
+        """
+        Game runs in ticks. A single move from each player can be done in a single tick.
+        Current tick is available through this property.
+        """
         return self._tick
 
     @property
-    def is_running(self):
+    def is_running(self) -> bool:
+        """
+        Determines if the game is still running
+        """
         return True
 
     @property
-    def bullets(self) -> List[Bullet]:
-        return list(self._bullets)
+    def players(self):
+        """
+        Gets all players that are currently alive in the game.
+        """
+        return list(self._players)
 
     @property
-    def players(self):
-        return list(self._players)
+    def bullets(self) -> List[Bullet]:
+        """
+        Gets all bullets currently present in the game.
+        """
+        return list(self._bullets)
+
+    @classmethod
+    def get_player_bounding_boxes(cls, position: Tuple[int, int]) -> List[CircleBox]:
+        """
+        Get bounding boxes of a player as if he were standing on given position
+        """
+        return [CircleBox(position, PLAYER_BOX_RADIUS)]
+
+    def get_nearest_hit(self, segment: Segment, extra_obstacles: Optional[List[Tuple]] = None) -> Optional[object]:
+        """
+        Gets game object which would be hit by bullet following given segment.
+        """
+        if segment is None:
+            return None
+
+        intersections = []
+        for box, obj in self.get_all_bounding_boxes():
+            for intersection in segment.get_intersection_points(box):
+                intersections.append((intersection, obj))
+
+        if extra_obstacles:
+            for box, obj in extra_obstacles:
+                for intersection in segment.get_intersection_points(box):
+                    intersections.append((intersection, obj))
+
+        if not intersections:
+            return None
+
+        return min(intersections, key=lambda p: distance_sqr(segment.start, p[0]))[1]
+
+    @classmethod
+    def get_positions_unreachable_for_players(cls) -> List[Tuple[int, int]]:
+        """
+        Gets positions which can't be reached by players (due to permanent obstacles)
+        """
+        global _UNREACHABLE_POSITIONS
+
+        return list(_UNREACHABLE_POSITIONS)
+
+    @classmethod
+    def would_player_hit_obstacle_on(cls, position: Tuple[int, int]):
+        """
+        Determine if player would collide with a permanent obstacle on given position
+        """
+
+        if position[0] < PLAYER_BOX_RADIUS or position[1] < PLAYER_BOX_RADIUS:
+            return True
+
+        if position[0] + PLAYER_BOX_RADIUS > MAP_WIDTH or position[1] + PLAYER_BOX_RADIUS > MAP_HEIGHT:
+            return True
+
+        bounding_boxes = cls.get_player_bounding_boxes(position)
+
+        for box in OBSTACLE_BOXES:
+            if box.intersects(bounding_boxes):
+                return True
+
+        return False
+
+    def get_player(self, player_id: str) -> Player:
+        """
+        Gets player by given id
+        """
+        return self._players[player_id]
+
+    def opponents_of(self, player: Player) -> List[Player]:
+        """
+        Gets alive opponents of given player
+        """
+        result = []
+        for opponent in self._players.values():
+            if opponent.id == player.id:
+                continue
+
+            result.append(opponent)
+
+        return result
+
+    def can_player_shoot(self, player_id: str) -> bool:
+        """
+        Determine if player with `player_id` can shoot in given tick
+        """
+        player = self._players[player_id]
+        return player.gun.can_shoot(self)
+
+    def can_player_step_on(self, position: Tuple[int, int], disabled_objects: List = None):
+        """
+        Determine if player can step on given position at current tick.
+        NOTE: All players are accounted for.
+        Therefore, if you test small player movements, you may want to add the player into disabled_objects.
+        """
+
+        if position[0] < PLAYER_BOX_RADIUS or position[1] < PLAYER_BOX_RADIUS:
+            return False
+
+        if position[0] + PLAYER_BOX_RADIUS > MAP_WIDTH or position[1] + PLAYER_BOX_RADIUS > MAP_HEIGHT:
+            return False
+
+        if disabled_objects is None:
+            disabled_objects = set()
+
+        spawn_box = self.get_player_bounding_boxes(position)
+        disabled_objects = set(disabled_objects)
+        for box, obj in self.get_all_bounding_boxes():
+            if obj in disabled_objects:
+                continue
+
+            if box.intersects(spawn_box):
+                return False
+
+        return True
+
+    def copy_without_internal_data(self):
+        """
+        Copies game without internal (non-serializable) data
+        """
+
+        tick_subscribers = self._tick_subscribers
+        pretick_subscribers = self._pretick_subscribers
+        self._tick_subscribers = None
+        self._pretick_subscribers = None
+        try:
+            game_copy = deepcopy(self)
+        finally:
+            self._tick_subscribers = tick_subscribers
+            self._pretick_subscribers = pretick_subscribers
+
+        game_copy._tick_subscribers = None
+        game_copy._pretick_subscribers = None
+        game_copy._verbose = None
+        game_copy._update_requests = []
+
+        return game_copy
+
+    def player_is_spawned(self, player_id: str) -> bool:
+        return player_id in self._players
+
+    def can_spawn(self, player_id: str) -> bool:
+        return self.ticks_from_death(player_id) >= MIN_RESPAWN_TICK_COUNT
+
+    def has_clear_bullet_path(self, player1: Player, player2: Player):
+        # determine if player1 can hit player2
+        # i.e. it detects if the bullet path is clear of obstacles and would end up in the player2
+        ray = player1.get_bullet_ray()
+        hit_obj = self.get_nearest_hit(ray)
+        return hit_obj == player2
+
+    def ticks_from_death(self, player_id):
+        if player_id not in self._dead_players:
+            return sys.maxsize
+
+        return self.tick - self._dead_players[player_id][1]
+
+    def find_spawn_point(self) -> Tuple[int, int]:
+        while True:
+            point = (random.randint(0, MAP_WIDTH), random.randint(0, MAP_HEIGHT))
+            if self.can_player_step_on(point):
+                return point
+
+    def _spawn_player(self, player_id: str):
+        if player_id in self._dead_players:
+            player, _ = self._dead_players.pop(player_id)
+            if player.gun.ammo_count == 0:
+                player.gun._cooldown_start = self.tick
+        else:
+            player = Player(player_id)
+
+        self._players[player.id] = player
+
+    def _kill_player(self, player_id: str):
+        killed_player = self._players.pop(player_id, None)
+        if killed_player:
+            self._dead_players[player_id] = killed_player, self.tick
+
+    def _get_cron_updates(self) -> List[GameUpdate]:
+        result = []
+        for player in self._players.values():
+            gun = player.gun
+            if gun.can_reload(self):
+                result.append(GunStateChange(player.id, new_ammo_count=gun.full_ammo_count))
+
+        for bullet in self._bullets:
+            bullet_age = self.tick - bullet.start_tick
+            trajectory = bullet.get_current_trajectory(self)
+            hit = self.get_nearest_hit(trajectory)
+
+            hit_player_id = None
+            if isinstance(hit, Player):
+                hit_player_id = hit.id
+                result.append(PlayerStateChange(hit_player_id, is_alive=False))
+
+            if hit is not None or bullet_age > MAX_BULLET_AGE:
+                result.append(RemoveBullet(bullet.id, hit_player_id, bullet.reward_receiver_id))
+
+        return result
+
+    def get_all_bounding_boxes(self) -> Iterable[Tuple]:
+        for player in self._players.values():
+            for box in self.get_player_bounding_boxes(player.position):
+                yield box, player
+
+        for box in OBSTACLE_BOXES:
+            yield box, box
 
     def subscribe_ticks(self, subscriber: Callable[[List[GameUpdate]], None]):
         self._tick_subscribers.append(subscriber)
@@ -136,178 +352,6 @@ class Game(object):
             return False
 
         return True
-
-    def copy_without_internal_data(self):
-        tick_subscribers = self._tick_subscribers
-        pretick_subscribers = self._pretick_subscribers
-        self._tick_subscribers = None
-        self._pretick_subscribers = None
-        try:
-            game_copy = deepcopy(self)
-        finally:
-            self._tick_subscribers = tick_subscribers
-            self._pretick_subscribers = pretick_subscribers
-
-        game_copy._tick_subscribers = None
-        game_copy._pretick_subscribers = None
-        game_copy._verbose = None
-        game_copy._update_requests = []
-
-        return game_copy
-
-    def get_player(self, state_id: str) -> Player:
-        return self._players[state_id]
-
-    def opponents_of(self, player: Player) -> List[Player]:
-        result = []
-        for opponent in self._players.values():
-            if opponent.id == player.id:
-                continue
-
-            result.append(opponent)
-
-        return result
-
-    def can_player_shoot(self, player_id: str):
-        player = self._players[player_id]
-        return player.gun.can_shoot(self)
-
-    def player_is_spawned(self, player_id: str) -> bool:
-        return player_id in self._players
-
-    def can_spawn(self, player_id: str) -> bool:
-        return self.ticks_from_death(player_id) >= MIN_RESPAWN_TICK_COUNT
-
-    def has_clear_bullet_path(self, player1: Player, player2: Player):
-        # determine if player1 can hit player2
-        # i.e. it detects if the bullet path is clear of obstacles and would end up in the player2
-        ray = player1.get_bullet_ray()
-        hit_obj = self.get_nearest_hit(ray)
-        return hit_obj == player2
-
-    def can_player_step_on(self, position: Tuple[int, int], disabled_objects=None):
-        if position[0] < PLAYER_BOX_RADIUS or position[1] < PLAYER_BOX_RADIUS:
-            return False
-
-        if position[0] + PLAYER_BOX_RADIUS > MAP_WIDTH or position[1] + PLAYER_BOX_RADIUS > MAP_HEIGHT:
-            return False
-
-        if disabled_objects is None:
-            disabled_objects = set()
-
-        spawn_box = self.get_player_bounding_boxes(position)
-        disabled_objects = set(disabled_objects)
-        for box, obj in self.get_all_bounding_boxes():
-            if obj in disabled_objects:
-                continue
-
-            if box.intersects(spawn_box):
-                return False
-
-        return True
-
-    def ticks_from_death(self, player_id):
-        if player_id not in self._dead_players:
-            return sys.maxsize
-
-        return self.tick - self._dead_players[player_id][1]
-
-    def find_spawn_point(self) -> Tuple[int, int]:
-        while True:
-            point = (random.randint(0, MAP_WIDTH), random.randint(0, MAP_HEIGHT))
-            if self.can_player_step_on(point):
-                return point
-
-    @classmethod
-    def get_player_bounding_boxes(cls, position: Tuple[int, int]) -> List:
-        return [CircleBox(position, PLAYER_BOX_RADIUS)]
-
-    def _spawn_player(self, player_id: str):
-        if player_id in self._dead_players:
-            player, _ = self._dead_players.pop(player_id)
-            if player.gun.ammo_count == 0:
-                player.gun._cooldown_start = self.tick
-        else:
-            player = Player(player_id)
-
-        self._players[player.id] = player
-
-    def _kill_player(self, player_id: str):
-        killed_player = self._players.pop(player_id, None)
-        if killed_player:
-            self._dead_players[player_id] = killed_player, self.tick
-
-    def _get_cron_updates(self) -> List[GameUpdate]:
-        result = []
-        for player in self._players.values():
-            gun = player.gun
-            if gun.can_reload(self):
-                result.append(GunStateChange(player.id, new_ammo_count=gun.full_ammo_count))
-
-        for bullet in self._bullets:
-            bullet_age = self.tick - bullet.start_tick
-            trajectory = bullet.get_current_trajectory(self)
-            hit = self.get_nearest_hit(trajectory)
-
-            hit_player_id = None
-            if isinstance(hit, Player):
-                hit_player_id = hit.id
-                result.append(PlayerStateChange(hit_player_id, is_alive=False))
-
-            if hit is not None or bullet_age > MAX_BULLET_AGE:
-                result.append(RemoveBullet(bullet.id, hit_player_id, bullet.reward_receiver_id))
-
-        return result
-
-    def get_nearest_hit(self, segment: Segment, extra_obstacles: Optional[List[Tuple]] = None):
-        if segment is None:
-            return None
-
-        intersections = []
-        for box, obj in self.get_all_bounding_boxes():
-            for intersection in segment.get_intersection_points(box):
-                intersections.append((intersection, obj))
-
-        if extra_obstacles:
-            for box, obj in extra_obstacles:
-                for intersection in segment.get_intersection_points(box):
-                    intersections.append((intersection, obj))
-
-
-        if not intersections:
-            return None
-
-        return min(intersections, key=lambda p: distance_sqr(segment.start, p[0]))[1]
-
-    def get_all_bounding_boxes(self) -> Iterable[Tuple]:
-        for player in self._players.values():
-            for box in self.get_player_bounding_boxes(player.position):
-                yield box, player
-
-        for box in OBSTACLE_BOXES:
-            yield box, box
-
-    @classmethod
-    def get_positions_unreachable_for_players(cls):
-        global _UNREACHABLE_POSITIONS
-
-        return list(_UNREACHABLE_POSITIONS)
-
-    @classmethod
-    def would_player_hit_obstacle_on(cls, position: Tuple[int, int]):
-        if position[0] < PLAYER_BOX_RADIUS or position[1] < PLAYER_BOX_RADIUS:
-            return True
-
-        if position[0] + PLAYER_BOX_RADIUS > MAP_WIDTH or position[1] + PLAYER_BOX_RADIUS > MAP_HEIGHT:
-            return True
-
-        bounding_boxes = cls.get_player_bounding_boxes(position)
-
-        for box in OBSTACLE_BOXES:
-            if box.intersects(bounding_boxes):
-                return True
-
-        return False
 
 
 for x in range(MAP_WIDTH):

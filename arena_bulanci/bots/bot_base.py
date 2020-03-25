@@ -1,7 +1,7 @@
 import random
 from concurrent.futures.thread import ThreadPoolExecutor
 from threading import Event
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 
 from arena_bulanci.bots.game_plan import GamePlan
 from arena_bulanci.core.bot_base_low_level import BotBaseLowLevel
@@ -12,7 +12,8 @@ from arena_bulanci.core.game_updates.player_move_request import PlayerMoveReques
 from arena_bulanci.core.game_updates.player_rotation_request import PlayerRotationRequest
 from arena_bulanci.core.game_updates.shoot_request import ShootRequest
 from arena_bulanci.core.player import Player
-from arena_bulanci.core.utils import distance, DIRECTION_DEFINITIONS, step_from
+from arena_bulanci.core.utils import distance, DIRECTION_DEFINITIONS, step_from, UP_DIRECTION, DOWN_DIRECTION, \
+    LEFT_DIRECTION, RIGHT_DIRECTION
 
 MAX_CACHED_PLANS = 100
 PLAN_EXECUTOR = ThreadPoolExecutor(max_workers=1)
@@ -141,14 +142,79 @@ class BotBase(BotBaseLowLevel):
 
         Getting stuck at temporary obstacles (i.e. other players) is solved by adding random steps and rotations.
         """
+        if self.position == target:
+            return
+
         if not self._try_move_towards_by_plan(target, wait_time_ms=wait_time_ms):
             self._simple_move_towards(target)
+
+    def MOVE_step_UP(self):
+        """
+        Enqueues rotation move (if needed) and a step forward in up direction.
+        """
+        self.MOVE_rotate(UP_DIRECTION)
+        self.MOVE_step_forward()
+
+    def MOVE_step_DOWN(self):
+        """
+        Enqueues rotation move (if needed) and a step forward in down direction.
+        """
+        self.MOVE_rotate(DOWN_DIRECTION)
+        self.MOVE_step_forward()
+
+    def MOVE_step_LEFT(self):
+        """
+        Enqueues rotation move (if needed) and a step forward in left direction.
+        """
+        self.MOVE_rotate(LEFT_DIRECTION)
+        self.MOVE_step_forward()
+
+    def MOVE_step_RIGHT(self):
+        """
+        Enqueues rotation move (if needed) and a step forward in right direction.
+        """
+        self.MOVE_rotate(RIGHT_DIRECTION)
+        self.MOVE_step_forward()
 
     def MOVE_rotate_randomly(self):
         """
         Enqueues a move which rotates to a random direction
         """
         self.MOVE_rotate(random.randint(0, len(DIRECTION_DEFINITIONS) - 1))
+
+    def will_be_bullet_hit(self, position: Tuple[int, int], from_tick: Optional[int] = None,
+                           to_tick: Optional[int] = None):
+        """
+        Determine if player standing on given position will be hit by an already existing bullet.
+        If not specified otherwise, only hit in the following game tick is tested.
+
+        (Permanent obstacles are accounted for, other players are not)
+        :param position: Position where the player is standing
+        :param from_tick: If specified, determine start of time period in which hit will be tested. Defaults to game.tick+1
+        :param to_tick: If specified, determine end of time period in which hit will be tested. Defaults to from_tick+1
+        :return: True if player standing on position will be hit, False otherwise
+        """
+
+        if from_tick is None:
+            from_tick = self.game.tick + 1
+
+        if to_tick is None:
+            to_tick = from_tick + 1
+
+        tick_offset = from_tick - self.game.tick
+        trajectory_ticks = to_tick - from_tick
+
+        boxes = self.game.get_player_bounding_boxes(position)
+        for bullet in self.game.bullets:
+            bullet_trajectory = bullet.get_current_trajectory(
+                self.game, trajectory_ticks=trajectory_ticks,
+                tick_offset=tick_offset
+            )
+
+            if bullet_trajectory.intersects(boxes):
+                return True
+
+        return False
 
     def get_random_reachable_point(self) -> Tuple[int, int]:
         """
@@ -216,6 +282,12 @@ class BotBase(BotBaseLowLevel):
             # keep moving in case of temporary tick drops
             future_requests.extend(
                 [current_request, current_request, current_request, current_request, current_request]
+            )
+
+        if current_request is None:
+            # keep standing still
+            future_requests.extend(
+                [None, None, None, None, None]
             )
 
         return future_requests

@@ -33,7 +33,7 @@ class ManualBot(BotBase):
                            "Manual Bot Control Web")
             app.register_control_callback(self._controll_callback)
             app.run_async()
-            print(f"MANUAL CONTROL WEB FOR `{self.player_id}` RUNNING ON: http://127.0.0.1:{self._port}/game")
+            print(f"MANUAL CONTROL WEB FOR `{self.player_id}` RUNNING ON: http://127.0.0.1:{self._port}/game\n")
 
         if self.direction != self._desired_direction:
             self.MOVE_rotate(self._desired_direction)
