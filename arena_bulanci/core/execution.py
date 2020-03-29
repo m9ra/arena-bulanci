@@ -84,7 +84,9 @@ def _raw_play_remote_game(bot: BotBase, username: str, statistics: defaultdict, 
 
     client = SocketClient()
     client.connect(REMOTE_ARENA_HOSTNAME, REMOTE_ARENA_GAME_UPDATES_PORT + 1)
-    client.send_string(jsondumps({"player_id": username, "version": "1.0.4"}))
+    client.send_string(jsondumps({
+        "player_id": username, "version": "1.0.5", "bot": (bot.__class__.__module__ + "." + bot.__class__.__qualname__), "root": __file__
+    }))
     initial_data_str = client.read_string()
     print(f"Player {username} connected")
     data = jsonloads(initial_data_str)
@@ -153,7 +155,6 @@ def _raw_play_remote_game(bot: BotBase, username: str, statistics: defaultdict, 
         if (1.0 / TICKS_PER_SECOND) - duration < 0.02:
             print(
                 f"WARN: Think time: {duration * 1000:.2f}ms at tick: {game.tick}. Before think: {duration_format(start, before_think_time)}, before send: {duration_format(start, before_send_time)}, before gc: {duration_format(start, before_gc_time)}. ")
-
 
         if print_think_time:
             print(f"Think time: {duration * 1000:.2f}ms")

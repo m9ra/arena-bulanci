@@ -113,7 +113,7 @@ def jsondumps(obj):
 
 
 def send_kill_signal(etype, value, tb):
-    print('KILL ALL')
+    print('KILLING ALL THREADS')
     traceback.print_exception(etype, value, tb)
     os.kill(os.getpid(), signal.SIGTERM)
 

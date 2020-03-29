@@ -51,7 +51,7 @@ def segment_with_circle_intersection(start: Tuple[float, float], end: Tuple[floa
     c = rx * rx + ry * ry - r * r
     # Now solve a*t^2 + 2*b*t + c = 0
     d = b * b - a * c
-    if d < 0.:
+    if d < 0. or a == 0:
         # no real intersection
         return
     s = math.sqrt(d)

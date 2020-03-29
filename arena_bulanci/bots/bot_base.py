@@ -1,3 +1,4 @@
+import math
 import random
 from concurrent.futures.thread import ThreadPoolExecutor
 from threading import Event
@@ -5,15 +6,16 @@ from typing import Tuple, List, Optional
 
 from arena_bulanci.bots.game_plan import GamePlan
 from arena_bulanci.core.bot_base_low_level import BotBaseLowLevel
-from arena_bulanci.core.config import MAX_FUTURE_UPDATE_REQUESTS
-from arena_bulanci.core.game import Game
+from arena_bulanci.core.config import MAX_FUTURE_UPDATE_REQUESTS, MAX_BULLET_AGE, BULLET_SPEED
+from arena_bulanci.core.game import Game, OBSTACLE_BOXES
 from arena_bulanci.core.game_updates.game_update_request import GameUpdateRequest
 from arena_bulanci.core.game_updates.player_move_request import PlayerMoveRequest
 from arena_bulanci.core.game_updates.player_rotation_request import PlayerRotationRequest
 from arena_bulanci.core.game_updates.shoot_request import ShootRequest
+from arena_bulanci.core.physics.segment import Segment
 from arena_bulanci.core.player import Player
 from arena_bulanci.core.utils import distance, DIRECTION_DEFINITIONS, step_from, UP_DIRECTION, DOWN_DIRECTION, \
-    LEFT_DIRECTION, RIGHT_DIRECTION
+    LEFT_DIRECTION, RIGHT_DIRECTION, grid_distance
 
 MAX_CACHED_PLANS = 100
 PLAN_EXECUTOR = ThreadPoolExecutor(max_workers=1)
@@ -190,13 +192,13 @@ class BotBase(BotBaseLowLevel):
 
         (Permanent obstacles are accounted for, other players are not)
         :param position: Position where the player is standing
-        :param from_tick: If specified, determine start of time period in which hit will be tested. Defaults to game.tick+1
+        :param from_tick: If specified, determine start of time period in which hit will be tested. Defaults to game.tick
         :param to_tick: If specified, determine end of time period in which hit will be tested. Defaults to from_tick+1
         :return: True if player standing on position will be hit, False otherwise
         """
 
         if from_tick is None:
-            from_tick = self.game.tick + 1
+            from_tick = self.game.tick
 
         if to_tick is None:
             to_tick = from_tick + 1
@@ -215,6 +217,62 @@ class BotBase(BotBaseLowLevel):
                 return True
 
         return False
+
+    def ticks_before_bullet_hit(self, position: Tuple[int, int]) -> Optional[int]:
+        """
+        Determine after how many ticks bullet will hit a player if he was standing at given position.
+        Number of ticks before first hit is returned, None if no hit is expected.
+
+        NOTE: Permanent obstacles are accounted for only (players, which can block the path are not taken into account)
+        """
+
+        boxes = self.game.get_player_bounding_boxes(position)
+        if len(boxes) != 1:
+            raise AssertionError("Method is implemented for a single player bounding box only")
+
+        ticks_to_hit = []
+        player_box = boxes[0]
+        for bullet in self.game.bullets:
+            trajectory = bullet.get_current_trajectory(
+                self.game, trajectory_ticks=MAX_BULLET_AGE,
+            )
+
+            hit_points = list(trajectory.get_intersection_points(player_box))
+            if not hit_points:
+                # bullet is not hitting the player
+                continue
+
+            pre_trajectory = Segment(bullet.start_position, trajectory.start, trajectory.direction_coords)
+            pre_trajectory_hits = self.get_permanent_obstacle_hit_points(pre_trajectory)
+            if pre_trajectory_hits:
+                # bullet would hit some obstacle before getting to the player
+                continue
+
+            obstacle_hit_points = self.get_permanent_obstacle_hit_points(trajectory)
+            bullet_end_point = min(
+                hit_points + obstacle_hit_points,
+                key=lambda p: grid_distance(bullet.start_position, p)
+            )
+
+            if bullet_end_point in hit_points:
+                # hit is on player
+                bullet_travel_distance = distance(trajectory.start, bullet_end_point)
+                ticks_to_hit.append(math.ceil(bullet_travel_distance / BULLET_SPEED))
+
+        if not ticks_to_hit:
+            return None
+
+        return min(ticks_to_hit)
+
+    def get_permanent_obstacle_hit_points(self, trajectory: Segment) -> List[Tuple[int, int]]:
+        """
+        Gets intersection points of the trajectory and permanent obstacles.
+        """
+        intersections = []
+        for box in OBSTACLE_BOXES:
+            intersections.extend(trajectory.get_intersection_points(box))
+
+        return intersections
 
     def get_random_reachable_point(self) -> Tuple[int, int]:
         """

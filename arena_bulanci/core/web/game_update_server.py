@@ -18,6 +18,11 @@ from arena_bulanci.core.networking.socket_client import SocketClient
 from arena_bulanci.core.utils import jsondumps, jsonloads, validate_email
 
 
+def log(message: str):
+    now = datetime.now()
+    print(f"[{now.strftime('%m/%d/%Y, %H:%M:%S')}] {message}")
+
+
 class GameUpdateServer(object):
     def __init__(self, game: Game, host: str, port: int, raw_updates_port: int):
         self._game = game  # game which is played in the arena
@@ -103,7 +108,7 @@ class GameUpdateServer(object):
         for player_id, updates_group in list(self._player_updates.items()):
             updates_group.append(update_group)
             if len(updates_group) > 100:
-                print(f"Player {player_id} was not responding for too long. Disconnecting.")
+                log(f"Player {player_id} was not responding for too long. Disconnecting.")
                 self._player_updates.pop(player_id)
                 client = self._player_to_client.get(player_id)
                 if client:
@@ -118,12 +123,12 @@ class GameUpdateServer(object):
                 self._player_updates[player_id].clear()
 
             except Exception as e:
-                print(f"sending updates to player_id: {player_id} failed: {repr(e)}")
+                log(f"sending updates to player_id: {player_id} failed: {repr(e)}")
 
         if self._update_roundtrip_start:
             self.roundtrip_update_time = (datetime.now() - self._update_roundtrip_start).total_seconds()
             if self.roundtrip_update_time > 0.035:
-                print(f"WARN: Update roundtrip: {self.roundtrip_update_time * 1000:.2f}ms")
+                log(f"WARN: Update roundtrip: {self.roundtrip_update_time * 1000:.2f}ms")
 
         with self._L_game:
             # make the pulse locked - this way, no update requests can be lost
@@ -144,11 +149,11 @@ class GameUpdateServer(object):
         try:
             await subscriber.send(full_state_data)
         except Exception as e:
-            print(f"_send_full_state_data {subscriber} {repr(e)}")
+            log(f"_send_full_state_data {subscriber} {repr(e)}")
             self._full_state_subscribers.discard(subscriber)
 
     async def _client_handler(self, websocket, path):
-        print(f"_client_handler({websocket}, {path})")
+        log(f"_client_handler({websocket}, {path})")
         if path == "/game":
             await websocket.send("disconnected; Updates are now served through raw TCP only")
         elif path == "/observer":
@@ -165,7 +170,7 @@ class GameUpdateServer(object):
                     self._control_callback(control_data)
 
         except Exception as e:
-            print(f"_observer_handler: {repr(e)}")
+            log(f"_observer_handler: {repr(e)}")
         finally:
             self._full_state_subscribers.discard(websocket)
 
@@ -196,14 +201,14 @@ class GameUpdateServer(object):
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind(('0.0.0.0', self._port + 1))
         s.listen()
-        print(f"ACCEPTING RAW CLIENTS ON PORT={self._raw_updates_port}")
+        log(f"ACCEPTING RAW CLIENTS ON PORT={self._raw_updates_port}")
 
         while True:
             client_socket, addr = s.accept()
             Thread(target=self._raw_game_play_handler, args=[client_socket, addr], daemon=True).start()
 
     def _raw_handle_player_connection(self, player_id: str, version: str, client: SocketClient):
-        print(f"PLAYER CONNECTED: {player_id}, version: {version}")
+        log(f"PLAYER CONNECTED: {player_id}, version: {version}")
 
         if player_id in self._player_to_client and self._player_to_client[player_id]:
             self._player_to_client[player_id].send_string("disconnected")
@@ -212,7 +217,7 @@ class GameUpdateServer(object):
         self._player_to_client[player_id] = client
 
     def _raw_handle_player_disconnection(self, player_id: str, client: SocketClient):
-        print(f"PLAYER DISCONNECTED {player_id}")
+        log(f"PLAYER DISCONNECTED {player_id}")
 
         with self._L_game:
             self._player_requests[player_id] = None
@@ -233,12 +238,13 @@ class GameUpdateServer(object):
                 player_id = initial_message["player_id"]
                 validate_email(player_id)
                 version = initial_message.get("version")
+                log(f"Connection attempt {player_id}> {initial_message}")
 
                 if version is None:
                     raise ValueError("Version is not set. Please update your bot to current protocol.")
 
             except Exception as e:
-                print(f"player validation {repr(e)}")
+                log(f"player validation {repr(e)}")
                 client.send_string(
                     jsondumps({"updates": [ErrorUpdate(player_id, repr(e))], "tick": self._game.tick + 1})
                 )
@@ -285,7 +291,7 @@ class GameUpdateServer(object):
 
 
         except Exception as e:
-            print(f"_raw_game_play_handler: {repr(e)}")
+            log(f"_raw_game_play_handler: {repr(e)}")
 
         finally:
             if player_id:
