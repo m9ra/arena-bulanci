@@ -94,7 +94,14 @@ function getSpriteSet() {
             imageObj.onload = function () {
                 imageObj.isLoaded = true;
             };
-            imageObj.src = `/static/bulanci/b_d${dir}_${i}.png`;
+
+            let src;
+            if (dir === 3) {
+                src = `/static/bulanci/b_d3/${('000' + i).substr(-3)}.png`;
+            } else {
+                src = `/static/bulanci/b_d${dir}_${i}.png`;
+            }
+            imageObj.src = src;
             animation.push(imageObj);
         }
     }
