@@ -167,7 +167,7 @@ class Game {
 
             if (KNOWN_BULLETS[bullet_id] === undefined) {
                 let audio = document.createElement("audio");
-                audio.src = "/static/audio/revolver.mp3";
+                audio.src = "/static/audio/revolver2.mp3";
                 audio.play().catch(() => true);
                 KNOWN_BULLETS[bullet_id] = true;
             }
