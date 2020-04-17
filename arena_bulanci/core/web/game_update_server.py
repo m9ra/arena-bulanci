@@ -161,6 +161,7 @@ class GameUpdateServer(object):
 
     async def _observer_handler(self, websocket):
         try:
+            log(f"_observer_handler({websocket.local_address})")
             self._full_state_subscribers.add(websocket)
             full_state_data = self._get_full_state_data()
             await websocket.send(full_state_data)

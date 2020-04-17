@@ -87,7 +87,7 @@ class BotBaseLowLevel(object):
             self._update_requests.clear()
 
             if game.can_spawn(self.player_id):
-                self._add_update_request(PlayerSpawnRequest(self.player_id, self.color))
+                self._spawn_bot()
 
         if not self._update_requests:
             return None
@@ -95,6 +95,9 @@ class BotBaseLowLevel(object):
         update = self._update_requests.pop(0)
         update.tick = game.tick
         return update
+
+    def _spawn_bot(self):
+        self._add_update_request(PlayerSpawnRequest(self.player_id, self.color))
 
     def try_pop_by_future_request(self, future_request: GameUpdateRequest) -> Optional[GameUpdateRequest]:
         """
@@ -121,6 +124,9 @@ class BotBaseLowLevel(object):
         self._update_requests.append(request)
 
     def _register_updates(self, updates: List[GameUpdate]):
+        if not updates:
+            return
+
         for update in updates:
             if isinstance(update, RemoveBullet):
                 self._on_kill_registered(update.reward_receiver_id, update.hit_player_id, update._bullet_id)

@@ -2,17 +2,19 @@ import datetime
 import gc
 from collections import defaultdict
 from time import sleep
-from typing import List
+from typing import List, Optional
 
 from arena_bulanci.bots.bot_base import BotBase
+from arena_bulanci.bots.jupyter_bot import JupyterBot
 from arena_bulanci.core.config import LOCAL_ARENA_GAME_UPDATES_PORT, LOCAL_ARENA_WEB_PORT, TICKS_PER_SECOND, \
-    REMOTE_ARENA_GAME_UPDATES_PORT, REMOTE_ARENA_HOSTNAME, LOCAL_ARENA_RAW_UPDATES_PORT
+    REMOTE_ARENA_GAME_UPDATES_PORT, REMOTE_ARENA_HOSTNAME, REMOTE_ARENA_WEB_PORT, LOCAL_ARENA_RAW_UPDATES_PORT
 from arena_bulanci.core.game import Game
 from arena_bulanci.core.game_updates.error import ErrorUpdate
 from arena_bulanci.core.networking.socket_client import SocketClient
 from arena_bulanci.core.utils import jsondumps, jsonloads, validate_email
 from arena_bulanci.core.web.arena_app import ArenaApp
 
+JUPYTER_BOT: Optional[BotBase] = JupyterBot()
 
 def run_local_game(bots: List[BotBase], simulate_real_delay=True):
     game = Game(verbose=False)
@@ -26,12 +28,14 @@ def run_local_game(bots: List[BotBase], simulate_real_delay=True):
         bot._raw_game = game
 
     last_updates = None
+    last_whole_iteration_duration = None
     while game.is_running:
         iteration_start = datetime.datetime.now()
         bot_updates = []
 
         # collect  update requests from bots
         for bot in bots:
+            app._connection_stats_handler(bot.player_id, last_whole_iteration_duration, 0)
             game_copy = game.copy_without_internal_data()
             update_request = bot.pop_update_request(game_copy, last_updates)
             if update_request:
@@ -49,22 +53,38 @@ def run_local_game(bots: List[BotBase], simulate_real_delay=True):
             sleep_time = max(0, desired_iteration_time - iteration_duration)
             sleep(sleep_time)
 
+        last_whole_iteration_duration = (datetime.datetime.now() - iteration_start).total_seconds()
+
 
 def run_remote_arena_game(bot: BotBase, username: str, print_skipped_tick_info: bool = True,
-                          print_think_time: bool = False):
+                          print_think_time: bool = False, arena_hostname_override: str = None):
     _run_remote_arena_game(bot, username, print_skipped_tick_info=print_skipped_tick_info,
-                           print_think_time=print_think_time)
+                           print_think_time=print_think_time, arena_hostname_override=arena_hostname_override)
+
+
+def run_remote_arena_game_for_jupyter(arena_hostname, username, screen_size_factor=0.5):
+    validate_email(username)
+
+    JUPYTER_BOT.run(arena_hostname, username)
+
+    url = f"http://{arena_hostname}:{REMOTE_ARENA_WEB_PORT}/game"
+    from IPython.display import IFrame
+    return IFrame(url, width=int(1920 * screen_size_factor), height=int(1080 * screen_size_factor))
+
 
 
 def _run_remote_arena_game(bot: BotBase, username: str, reconnect=True, print_skipped_tick_info=True,
-                           print_think_time=False):
+                           print_think_time=False, arena_hostname_override: str = None):
     statistics = defaultdict(int)
 
     while True:
         try:
             statistics["connection_count"] += 1
             _raw_play_remote_game(bot, username, statistics, print_skipped_tick_info=print_skipped_tick_info,
-                                  print_think_time=print_think_time)
+                                  print_think_time=print_think_time, arena_hostname_override=arena_hostname_override)
+        except SystemExit:
+            print("Exiting.")
+            break
         except (ConnectionAbortedError, ConnectionRefusedError, ConnectionResetError, ConnectionError):
             if reconnect:
                 print("Disconnected, trying to reconnect")
@@ -77,13 +97,18 @@ def _run_remote_arena_game(bot: BotBase, username: str, reconnect=True, print_sk
 
 
 def _raw_play_remote_game(bot: BotBase, username: str, statistics: defaultdict, print_skipped_tick_info=True,
-                          print_think_time=False):
+                          print_think_time=False, arena_hostname_override: str = None):
 
     bot.player_id = username
     validate_email(username)
 
     client = SocketClient()
-    client.connect(REMOTE_ARENA_HOSTNAME, REMOTE_ARENA_GAME_UPDATES_PORT + 1)
+
+    hostname = REMOTE_ARENA_HOSTNAME
+    if arena_hostname_override:
+        hostname = arena_hostname_override
+
+    client.connect(hostname, REMOTE_ARENA_GAME_UPDATES_PORT + 1)
     client.send_string(jsondumps({
         "player_id": username, "version": "1.0.5", "bot": (bot.__class__.__module__ + "." + bot.__class__.__qualname__), "root": __file__
     }))
